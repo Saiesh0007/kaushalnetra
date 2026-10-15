@@ -8,6 +8,7 @@ import html
 import json
 import os
 import re
+from pathlib import Path
 from datetime import datetime
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile, WebSocket, WebSocketDisconnect
@@ -475,3 +476,32 @@ def copilot_ask(body: CopilotIn, db: Session = Depends(get_db)) -> dict:
     out = ask(db, body.question[:2000], body.history)
     out["provider"] = os.environ.get("KNETRA_LLM_MODEL") if llm_configured() else None
     return out
+
+
+# ---------------------------------------------------------------- accuracy lab
+RESULTS_DIR = Path(__file__).resolve().parents[2] / "ml" / "results"
+
+
+@app.get("/api/v1/eval/report")
+def eval_report() -> dict:
+    """Latest outputs of the evaluation harnesses in ml/eval/ (Rules.md §2.1: every claimed number traces to a run)."""
+    out = {}
+    for f in sorted(RESULTS_DIR.glob("*.json")):
+        try:
+            out[f.stem] = json.loads(f.read_text(encoding="utf-8"))
+        except ValueError:
+            continue
+    return out
+
+
+# ---------------------------------------------------------------- built dashboard (single-container deploy)
+DIST = Path(__file__).resolve().parents[2] / "dashboard" / "dist"
+if DIST.exists():
+    from fastapi.staticfiles import StaticFiles
+
+    app.mount("/assets", StaticFiles(directory=DIST / "assets"), name="assets")
+    app.mount("/geo", StaticFiles(directory=DIST / "geo"), name="geo")
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def spa(path: str) -> FileResponse:
+        return FileResponse(DIST / "index.html")

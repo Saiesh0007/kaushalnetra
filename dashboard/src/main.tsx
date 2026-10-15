@@ -9,6 +9,7 @@ import { Alerts } from "./pages/Alerts";
 import { Centre } from "./pages/Centre";
 import { ControlRoom } from "./pages/ControlRoom";
 import { Copilot } from "./pages/Copilot";
+import { AccuracyLab } from "./pages/AccuracyLab";
 import { CentreList, Overview } from "./pages/Overview";
 
 function ThemeToggle() {
@@ -83,6 +84,7 @@ function Shell() {
         <NavLink to="/alerts" className="nav">Alerts</NavLink>
         <NavLink to="/live" className="nav">Control room</NavLink>
         <NavLink to="/copilot" className="nav">Copilot</NavLink>
+        <NavLink to="/accuracy" className="nav">Accuracy lab</NavLink>
         <div className="side-foot">
           <span className="row" style={{ gap: 6 }}>
             {connected ? <span className="pulse" /> : <span style={{ width: 8, height: 8, borderRadius: 4, background: "var(--text-muted)" }} />}
@@ -100,6 +102,7 @@ function Shell() {
           <Route path="/alerts" element={<Alerts />} />
           <Route path="/live" element={<ControlRoom />} />
           <Route path="/copilot" element={<Copilot />} />
+          <Route path="/accuracy" element={<AccuracyLab />} />
         </Routes>
       </main>
       <Toasts />

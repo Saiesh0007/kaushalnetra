@@ -1,0 +1,7 @@
+.venv
+data
+runs
+edge/var
+dashboard/node_modules
+**/__pycache__
+*.pt

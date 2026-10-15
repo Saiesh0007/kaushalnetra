@@ -1,5 +1,6 @@
-export const API: string = (import.meta.env.VITE_API as string | undefined) ?? "http://127.0.0.1:8000";
-export const WS_URL = API.replace(/^http/, "ws") + "/ws";
+// dev: separate API server; production build: dashboard is served by the API itself (same origin)
+export const API: string = (import.meta.env.VITE_API as string | undefined) ?? (import.meta.env.PROD ? "" : "http://127.0.0.1:8000");
+export const WS_URL = (API || window.location.origin).replace(/^http/, "ws") + "/ws";
 
 export type Band = "low" | "medium" | "high";
 export type Severity = "critical" | "warning" | "info";

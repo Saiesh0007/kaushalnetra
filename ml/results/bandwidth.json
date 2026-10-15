@@ -1,0 +1,46 @@
+{
+ "centres": [
+  {
+   "centre": "KN-DEMO-D",
+   "mode": "edge",
+   "bytes_sent": 73318,
+   "raw_video_bytes": 405000000,
+   "reduction": 5524,
+   "session_hours": 1.0,
+   "kb_per_session_hour": 71.6
+  },
+  {
+   "centre": "KN-DEMO-B",
+   "mode": "edge",
+   "bytes_sent": 77736,
+   "raw_video_bytes": 742500000,
+   "reduction": 9552,
+   "session_hours": 2.0,
+   "kb_per_session_hour": 38.0
+  },
+  {
+   "centre": "KN-DEMO-C",
+   "mode": "edge",
+   "bytes_sent": 271439,
+   "raw_video_bytes": 0,
+   "reduction": null,
+   "session_hours": 0.0,
+   "kb_per_session_hour": null
+  },
+  {
+   "centre": "KN-DEMO-A",
+   "mode": "edge",
+   "bytes_sent": 101837,
+   "raw_video_bytes": 945945000,
+   "reduction": 9289,
+   "session_hours": 2.17,
+   "kb_per_session_hour": 45.9
+  }
+ ],
+ "total_sent": 252891,
+ "total_raw": 2093445000,
+ "overall_reduction": 8278,
+ "kb_per_camera_hour": 47.8,
+ "mb_per_camera_day_8h": 0.37,
+ "note": "Raw video = what streaming the same centre time at 1 Mbps (720p H.264) would upload. Includes all evidence thumbnails."
+}

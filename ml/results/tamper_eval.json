@@ -1,0 +1,81 @@
+{
+ "planted_episodes": 8,
+ "detected": 8,
+ "detection_rate": 1.0,
+ "per_type": {
+  "looped": "4/4",
+  "frozen": "2/2",
+  "covered": "2/2"
+ },
+ "false_triggers": 0,
+ "clean_footage_minutes": 5.5,
+ "note": "clean footage = all clips outside planted intervals; sampling 1 frame per clip second (2 s for tamper_test)",
+ "clips": [
+  {
+   "clip": "data/stock/centre_d_tamper.mp4",
+   "episodes": 4,
+   "fired": [
+    "looped@28s",
+    "frozen@36s",
+    "covered@40s",
+    "looped@53s"
+   ]
+  },
+  {
+   "clip": "data/samples/tamper_test.mp4",
+   "episodes": 4,
+   "fired": [
+    "looped@78s",
+    "frozen@118s",
+    "covered@132s",
+    "frozen@138s",
+    "looped@148s"
+   ]
+  },
+  {
+   "clip": "data/stock/35954.mp4",
+   "episodes": 0,
+   "fired": []
+  },
+  {
+   "clip": "data/stock/35968.mp4",
+   "episodes": 0,
+   "fired": []
+  },
+  {
+   "clip": "data/stock/24099.mp4",
+   "episodes": 0,
+   "fired": []
+  },
+  {
+   "clip": "data/stock/23231.mp4",
+   "episodes": 0,
+   "fired": []
+  },
+  {
+   "clip": "data/stock/24259.mp4",
+   "episodes": 0,
+   "fired": []
+  },
+  {
+   "clip": "data/stock/23232.mp4",
+   "episodes": 0,
+   "fired": []
+  },
+  {
+   "clip": "data/stock/28315.mp4",
+   "episodes": 0,
+   "fired": []
+  },
+  {
+   "clip": "data/stock/28319.mp4",
+   "episodes": 0,
+   "fired": []
+  },
+  {
+   "clip": "data/samples/vtest.avi",
+   "episodes": 0,
+   "fired": []
+  }
+ ]
+}
