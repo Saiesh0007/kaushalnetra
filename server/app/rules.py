@@ -101,30 +101,35 @@ def _item_alerts(db: Session, centre: Centre) -> None:
         if not checks:
             continue
         latest = checks[0]
-        for state, kind, sev, label in (("candidate_missing", "item_missing", "warning", "not found at its registered position"),
-                                        ("changed", "item_changed", "info", "appearance changed (covered or swapped?)")):
-            run = []
-            for c in checks:  # newest first; skip unverifiable checks rather than breaking the run
-                if c.state == state:
-                    run.append(c)
-                elif c.state in ("unverifiable", "uncertain"):
-                    continue
-                else:
-                    break
-            key = f"{kind}:{centre.code}:{item.item_key}"
-            if run and len(run) >= cfg["persist_checks"]:
-                days = len({c.ts.date() for c in run})
-                if days >= cfg["min_days"]:
-                    _upsert_alert(
-                        db, key=key, centre=centre, kind=kind, severity=sev,
-                        title=f"{item.class_name.title()} {item.item_key} {label}",
-                        detail=f"{len(run)} consecutive checks over {days} days. Last similarity {run[0].sim}.",
-                        evidence=dict(item_key=item.item_key, checks=[dict(ts=c.ts.isoformat(), state=c.state, sim=c.sim,
-                                      det_conf=c.det_conf, thumb_id=c.thumb_id) for c in run[:6]],
-                                      thumb_ids=[c.thumb_id for c in run if c.thumb_id][:6], thresholds=cfg),
-                        ts=run[-1].ts,
-                    )
-            elif latest.state in ("present", "relocated"):
+        # covered items flip between "changed" (detector still sees the shape) and "candidate_missing":
+        # both are anomalies, so they form one persistence run
+        anomaly = ("candidate_missing", "changed")
+        run = []
+        for c in checks:  # newest first; unverifiable checks neither extend nor break the run
+            if c.state in anomaly:
+                run.append(c)
+            elif c.state in ("unverifiable", "uncertain"):
+                continue
+            else:
+                break
+        n_missing = sum(c.state == "candidate_missing" for c in run)
+        kind = "item_missing" if n_missing * 2 > len(run) or (run and run[0].state == "candidate_missing" and n_missing * 2 == len(run)) else "item_changed"
+        days = len({c.ts.date() for c in run})
+        for k in ("item_missing", "item_changed"):
+            key = f"{k}:{centre.code}:{item.item_key}"
+            if k == kind and len(run) >= cfg["persist_checks"] and days >= cfg["min_days"]:
+                label = "not found at its registered position" if k == "item_missing" else "appearance changed (covered or swapped?)"
+                _upsert_alert(
+                    db, key=key, centre=centre, kind=k, severity="warning",
+                    title=f"{item.class_name.title()} {item.item_key} {label}",
+                    detail=(f"{len(run)} consecutive anomalous checks over {days} days "
+                            f"({n_missing} not found, {len(run) - n_missing} changed). Last similarity {run[0].sim}."),
+                    evidence=dict(item_key=item.item_key, checks=[dict(ts=c.ts.isoformat(), state=c.state, sim=c.sim,
+                                  det_conf=c.det_conf, thumb_id=c.thumb_id) for c in run[:6]],
+                                  thumb_ids=[c.thumb_id for c in run if c.thumb_id][:6], thresholds=cfg),
+                    ts=run[-1].ts,
+                )
+            elif not run and latest.state in ("present", "relocated"):
                 _auto_resolve(db, key, f"auto: item observed {latest.state} at {latest.ts:%Y-%m-%d %H:%M} UTC")
 
     # usage evidence (Design.md §4)

@@ -1,4 +1,4 @@
-"""Drishti central server: ingest, registry, rules, REST API and live WebSocket (Architecture.md §3.2, Design.md §11)."""
+"""KaushalNetra central server: ingest, registry, rules, REST API and live WebSocket (Architecture.md §3.2, Design.md §11)."""
 from __future__ import annotations
 
 import gzip
@@ -20,10 +20,10 @@ from common import schemas as S
 from . import db as D
 from .rules import evaluate_centre, risk_score, session_attendance
 
-EDGE_SECRET = os.environ.get("DRISHTI_EDGE_SECRET", "dev-secret").encode()
+EDGE_SECRET = os.environ.get("KNETRA_EDGE_SECRET", "dev-secret").encode()
 THUMB_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
-app = FastAPI(title="Drishti API", version="0.1.0")
+app = FastAPI(title="KaushalNetra API", version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 

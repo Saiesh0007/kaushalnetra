@@ -22,6 +22,9 @@ class Sample:
 
 
 def iter_samples(source: str, interval_s: float, start_time: datetime | None, realtime: bool = False) -> Iterator[Sample]:
+    if source.endswith(".csv"):
+        yield from _snapshot_samples(source)
+        return
     cap = cv2.VideoCapture(source)
     if not cap.isOpened():
         raise RuntimeError(f"cannot open source {source}")
@@ -72,3 +75,17 @@ def _live_samples(cap, interval_s) -> Iterator[Sample]:
             if ok:
                 yield Sample(datetime.now(IST), frame, int((now - t0) * LIVE_BITRATE_BPS / 8))
             nxt = now + interval_s
+
+
+def _snapshot_samples(manifest: str) -> Iterator[Sample]:
+    """Snapshot mode: a CSV of `ts,path` stills (periodic JPEGs from the camera instead of video)."""
+    import csv
+    from pathlib import Path
+
+    base = Path(manifest).parent
+    with open(manifest, newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            frame = cv2.imread(str(base / row["path"]))
+            if frame is None:
+                continue
+            yield Sample(datetime.fromisoformat(row["ts"]), frame, 0)

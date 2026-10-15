@@ -44,6 +44,25 @@ class TamperCfg(BaseModel):
     loop_min_motion: int = 12     # summed hash change inside the window; static rooms can't "loop"
 
 
+class InfraCfg(BaseModel):
+    open_vocab: str | None = "yolov8s-worldv2.pt"   # None disables detector confirmation
+    open_vocab_imgsz: int = 1280       # small, distant items need the higher input resolution
+    open_vocab_conf: float = 0.12
+    embedder: str = "facebook/dinov2-small"
+    check_interval_s: float = 1800.0   # one check per slot, on the emptiest frame of the slot
+    orb_features: int = 1500
+    min_inliers: int = 40
+    max_drift: float = 0.05            # max corner displacement (fraction of width) before "camera moved"
+    occlusion_frac: float = 0.30
+    dark_scene: float = 45.0           # frame mean below this = lights off / dim ...
+    dark_ratio: float = 0.5            # ... and the item crop below this fraction of its reference brightness
+    sim_floor: float = 0.55
+    calib_margin: float = 0.03
+    hysteresis: float = 0.10
+    det_iou: float = 0.30
+    reloc_tie: float = 0.05            # appearance similarities this close count as a tie (identical models)
+
+
 class CameraCfg(BaseModel):
     id: str
     name: str = ""
@@ -52,6 +71,7 @@ class CameraCfg(BaseModel):
     coverage: float = 1.0
     training_zone: list[list[float]] = [[0, 0], [1, 0], [1, 1], [0, 1]]   # normalised polygon
     anchor: str = "center"               # "center" or "bottom" of person box
+    reference_images: list[str] = []     # registration views; enables equipment checks for this camera
 
 
 class SessionCfg(BaseModel):
@@ -69,6 +89,7 @@ class AgentCfg(BaseModel):
     sampling: SamplingCfg = SamplingCfg()
     privacy: PrivacyCfg = PrivacyCfg()
     tamper: TamperCfg = TamperCfg()
+    infra: InfraCfg = InfraCfg()
     cameras: list[CameraCfg]
     sessions: list[SessionCfg] = []
 
@@ -86,7 +107,8 @@ def load(path: str | Path) -> AgentCfg:
     path = Path(path)
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     cfg = AgentCfg.model_validate(raw)
-    for cam in cfg.cameras:  # resolve file sources relative to the config file
-        if "://" not in cam.source and not Path(cam.source).is_absolute():
-            cam.source = str((path.parent / cam.source).resolve())
+    rel = lambda p: p if ("://" in p or Path(p).is_absolute()) else str((path.parent / p).resolve())  # noqa: E731
+    for cam in cfg.cameras:  # resolve file paths relative to the config file
+        cam.source = rel(cam.source)
+        cam.reference_images = [rel(r) for r in cam.reference_images]
     return cfg

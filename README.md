@@ -1,8 +1,8 @@
-# Drishti: AI Compliance Monitoring for Training Centres
+# KaushalNetra: AI Compliance Monitoring for Training Centres
 
 > SIH 2026 · Problem Statement **26245** · Ministry of Skill Development and Entrepreneurship (MSDE) · Theme: Smart Education
 
-Drishti turns the CCTV cameras that already exist in government-funded training centres into compliance sensors. A small edge device at each centre analyses the camera feeds on site. It then sends only compact, privacy-safe events to a central dashboard:
+KaushalNetra turns the CCTV cameras that already exist in government-funded training centres into compliance sensors. A small edge device at each centre analyses the camera feeds on site. It then sends only compact, privacy-safe events to a central dashboard:
 
 - **Attendance discrepancies:** the observed head-count is checked against the attendance the centre submitted.
 - **Infrastructure gaps:** sanctioned equipment that is missing, relocated or never used.
@@ -13,7 +13,7 @@ No face recognition is used anywhere. Raw video never leaves the centre.
 ## Why it matters
 
 - Physical inspections happen only periodically. Ghost attendance and missing equipment between visits go unnoticed.
-- Drishti flags problems as they happen and ranks centres by risk, so inspectors visit the right centres first.
+- KaushalNetra flags problems as they happen and ranks centres by risk, so inspectors visit the right centres first.
 
 ## Repository layout
 

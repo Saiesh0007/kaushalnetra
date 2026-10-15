@@ -14,12 +14,13 @@ from datetime import datetime
 import cv2
 import httpx
 
-from common.schemas import CameraSpec, Heartbeat, OccupancyWindow, Tamper
+from common.schemas import CameraSpec, Heartbeat, ItemCheck, OccupancyWindow, Tamper
 
 from . import config as C
 from .attendance import OccupancyAggregator, Zone
 from .capture import IST, iter_samples
 from .detect import PersonDetector
+from .infra import Embedder, ItemVerifier, OpenVocabDetector
 from .outbox import Outbox
 from .privacy import evidence_jpeg
 from .tamper import TamperDetector
@@ -28,8 +29,16 @@ log = logging.getLogger("agent")
 
 
 class CameraWorker:
-    def __init__(self, cfg: C.AgentCfg, cam: C.CameraCfg, detector: PersonDetector, outbox: Outbox, realtime: bool) -> None:
+    def __init__(self, cfg: C.AgentCfg, cam: C.CameraCfg, detector: PersonDetector, outbox: Outbox, realtime: bool,
+                 infra_models: tuple | None = None) -> None:
         self.cfg, self.cam, self.det, self.outbox, self.realtime = cfg, cam, detector, outbox, realtime
+        self.verifier: ItemVerifier | None = None
+        items = [(i.id, i.class_name, i.bbox) for i in cfg.centre.items if i.camera_id == cam.id and i.bbox]
+        if cam.reference_images and items and infra_models:
+            refs = [cv2.imread(p) for p in cam.reference_images]
+            self.verifier = ItemVerifier(items, [r for r in refs if r is not None], *infra_models, cfg.infra)
+        self.slot: int | None = None
+        self.slot_best: tuple | None = None   # (n_people, ts, frame, dets) of the emptiest frame in the current slot
         self.zone = Zone(cam.training_zone, cam.anchor)
         self.tamper = TamperDetector(cfg.tamper)
         self.agg = OccupancyAggregator(cfg.sampling.window_s, self._emit_window)
@@ -83,12 +92,65 @@ class CameraWorker:
                                        thumb_id=self._store_thumb(thumb())))
 
             sess = self.cfg.session_at(s.ts)
+            if self.verifier is not None:
+                self._consider_for_infra(s.ts, s.frame, dets)
             if sess is not None:
                 self.agg.add(s.ts, self.cfg.session_ref(sess), sess.start, len(counted), thumb)
             if self.realtime:
                 self.latest_jpeg = thumb()
         self.agg.flush()
+        self._run_infra_check()
         log.info("[%s] done: %d samples in %.1fs", self.cam.id, self.frames, time.monotonic() - t0)
+
+
+    # -------------------------------------------------- equipment checks (Design.md §3)
+    def _consider_for_infra(self, ts, frame, dets) -> None:
+        """Keep the emptiest frame of each check slot; check it when the slot closes."""
+        slot = int(ts.timestamp() // self.cfg.infra.check_interval_s)
+        if self.slot is not None and slot != self.slot:
+            self._run_infra_check()
+        self.slot = slot
+        if self.slot_best is None or len(dets) < self.slot_best[0]:
+            self.slot_best = (len(dets), ts, frame, dets)
+
+    def _run_infra_check(self) -> None:
+        if self.verifier is None or self.slot_best is None:
+            return
+        _, ts, frame, dets = self.slot_best
+        self.slot_best = None
+        rw, rh = self.verifier.size
+        sx, sy = rw / frame.shape[1], rh / frame.shape[0]
+        persons = [(d.x1 * sx, d.y1 * sy, d.x2 * sx, d.y2 * sy) for d in dets]
+        res = self.verifier.check(frame, persons)
+        if not res.camera_ok:
+            kind = "camera_moved"
+            if kind not in self.tamper.active:
+                self.tamper.active.add(kind)
+                log.warning("[%s] TAMPER camera_moved (inliers=%d)", self.cam.id, res.inliers)
+                self.outbox.put(Tamper(event_id=self._eid("tamper", kind, ts.isoformat()), camera_id=self.cam.id, ts=ts,
+                                       kind=kind, details=dict(inliers=res.inliers),
+                                       thumb_id=self._store_thumb(self._infra_thumb(frame, dets, []))))
+            return
+        self.tamper.active.discard("camera_moved")
+        for r in res.items:
+            # evidence only when something is wrong: "present" costs zero image bytes
+            tid = self._store_thumb(self._infra_thumb(frame, dets, [r])) if r.state not in ("present",) else None
+            self.outbox.put(ItemCheck(event_id=self._eid("item", r.id, ts.isoformat()), camera_id=self.cam.id, ts=ts,
+                                      item_id=r.id, state=r.state, sim=r.sim, det_conf=r.det_conf, thumb_id=tid))
+        log.info("[%s] equipment check %s: %s", self.cam.id, f"{ts:%m-%d %H:%M}",
+                 ", ".join(f"{r.id}={r.state}({r.sim})" for r in res.items))
+
+    def _infra_thumb(self, frame, dets, results) -> bytes:
+        rw = self.verifier.size[0]
+        k = frame.shape[1] / rw
+
+        def overlay(img, scale):
+            for r in results:
+                x1, y1, x2, y2 = (v * k * scale for v in r.box)
+                cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 255), 2)
+                cv2.putText(img, f"{r.id} {r.state}", (int(x1), max(12, int(y1) - 4)), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
+
+        return evidence_jpeg(frame, [d.box for d in dets], 480, self.cfg.privacy.jpeg_quality, overlay)
 
 
 def register(cfg: C.AgentCfg) -> None:
@@ -100,7 +162,7 @@ def register(cfg: C.AgentCfg) -> None:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Drishti edge agent")
+    ap = argparse.ArgumentParser(description="KaushalNetra edge agent")
     ap.add_argument("--config", required=True)
     ap.add_argument("--realtime", action="store_true", help="pace file sources at real speed (live demo)")
     ap.add_argument("--no-register", action="store_true")
@@ -116,7 +178,12 @@ def main() -> None:
     outbox = Outbox(cfg.device_id, cfg.centre.code, cfg.server.url, cfg.server.secret, cfg.server.upload_interval_s)
     outbox.start()
 
-    workers = [CameraWorker(cfg, cam, detector, outbox, args.realtime) for cam in cfg.cameras]
+    infra_models = None
+    if any(c.reference_images for c in cfg.cameras) and cfg.centre.items:
+        vocab = sorted({i.class_name for i in cfg.centre.items})
+        infra_models = (Embedder(cfg.infra.embedder),
+                        OpenVocabDetector(cfg.infra.open_vocab, vocab, cfg.infra.open_vocab_conf, cfg.infra.open_vocab_imgsz) if cfg.infra.open_vocab else None)
+    workers = [CameraWorker(cfg, cam, detector, outbox, args.realtime, infra_models) for cam in cfg.cameras]
     threads = [threading.Thread(target=w.run, name=w.cam.id) for w in workers]
     for t in threads:
         t.start()

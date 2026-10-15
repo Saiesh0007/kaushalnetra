@@ -8,12 +8,12 @@ from pathlib import Path
 from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
-VAR_DIR = Path(os.environ.get("DRISHTI_VAR", Path(__file__).resolve().parents[1] / "var"))
+VAR_DIR = Path(os.environ.get("KNETRA_VAR", Path(__file__).resolve().parents[1] / "var"))
 VAR_DIR.mkdir(parents=True, exist_ok=True)
 THUMB_DIR = VAR_DIR / "thumbs"
 THUMB_DIR.mkdir(exist_ok=True)
 
-engine = create_engine(f"sqlite:///{VAR_DIR / 'drishti.db'}", connect_args={"check_same_thread": False})
+engine = create_engine(f"sqlite:///{VAR_DIR / 'kaushalnetra.db'}", connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(engine, expire_on_commit=False)
 
 
