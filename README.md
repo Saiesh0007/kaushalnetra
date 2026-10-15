@@ -21,6 +21,7 @@ No face recognition is used anywhere. Raw video never leaves the centre.
 SIH/
 ├── README.md            ← you are here
 ├── docs/
+│   ├── Plan.md          ← master plan: how we win + startup & funding path
 │   ├── Project.md       ← problem statement, scope, deliverables, success criteria
 │   ├── Architecture.md  ← system architecture, components, data flow, deployment modes
 │   ├── Design.md        ← detailed design: algorithms, data model, APIs, dashboard
