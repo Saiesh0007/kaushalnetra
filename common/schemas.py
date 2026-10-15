@@ -69,6 +69,7 @@ class Heartbeat(_Event):
     bytes_sent: int = 0
     raw_video_bytes: int = 0
     mode: Literal["edge", "snapshot"] = "edge"
+    uptime_pct: float | None = None   # share of scheduled session time the camera was online (last 14 days)
 
 
 Event = Annotated[Union[OccupancyWindow, ItemCheck, ItemUsage, Tamper, Heartbeat], Field(discriminator="type")]

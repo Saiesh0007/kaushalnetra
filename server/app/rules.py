@@ -59,34 +59,43 @@ def session_attendance(db: Session, centre: Centre) -> list[dict]:
 
 
 def _attendance_alerts(db: Session, centre: Centre) -> None:
+    """One rolling alert per batch (not per session), so a persistently inflating centre is one actionable item."""
     cfg = CFG["attendance"]
-    results = session_attendance(db, centre)
-    observed_results = [r for r in results if r["observed"] is not None and r["claimed"] is not None]
-    for i, r in enumerate(observed_results):
-        recent = observed_results[max(0, i - cfg["persist_lookback"] + 1): i + 1]
-        n_flagged = sum(x["flagged"] for x in recent)
-        if r["flagged"]:
-            persistent = n_flagged >= cfg["persist_sessions"]
-            big = r["gap_pct"] >= cfg["single_session_warn_pct"]
+    results = [r for r in session_attendance(db, centre) if r["observed"] is not None and r["claimed"] is not None]
+    by_batch: dict[str, list[dict]] = defaultdict(list)
+    for r in results:
+        by_batch[r["batch"] or "default"].append(r)
+    for batch, rs in by_batch.items():
+        recent = rs[-cfg["persist_lookback"]:]
+        flagged = [r for r in recent if r["flagged"]]
+        key = f"att:{centre.code}:{batch}"
+        if flagged:
+            worst = max(flagged, key=lambda r: r["gap_pct"])
+            persistent = len(flagged) >= cfg["persist_sessions"]
+            big = worst["gap_pct"] >= cfg["single_session_warn_pct"]
             severity = "critical" if (persistent and big) else "warning" if (persistent or big) else "info"
+            last = flagged[-1]
             _upsert_alert(
-                db, key=f"att:{r['session_ref']}", centre=centre, kind="attendance", severity=severity,
-                title=f"Attendance discrepancy: claimed {r['claimed']}, observed {r['observed']:g} ± {r['band']}",
-                detail=(f"Session {r['session_ref']}: gap {r['gap']:g} ({r['gap_pct']:.0%} of claimed). "
-                        f"{n_flagged} of the last {len(recent)} observed sessions were flagged."),
-                evidence=dict(session_ref=r["session_ref"], claimed=r["claimed"], observed=r["observed"], band=r["band"],
-                              gap_pct=r["gap_pct"], flagged_recent=n_flagged, thumb_ids=r.get("thumb_ids", []),
-                              thresholds=cfg),
-                ts=r["start"],
+                db, key=key, centre=centre, kind="attendance", severity=severity,
+                title=(f"Attendance discrepancy, batch {batch}: claimed {last['claimed']}, observed {last['observed']:g} ± {last['band']}"),
+                detail=(f"{len(flagged)} of the last {len(recent)} observed sessions exceed tolerance; worst gap "
+                        f"{worst['gap_pct']:.0%} on {worst['start']:%d %b}."),
+                evidence=dict(batch=batch, sessions=[dict(session_ref=r["session_ref"], start=r["start"].isoformat(), claimed=r["claimed"],
+                                                          observed=r["observed"], band=r["band"], gap_pct=r["gap_pct"], flagged=r["flagged"])
+                                                     for r in recent],
+                              thumb_ids=[t for r in flagged for t in r.get("thumb_ids", [])][:6], thresholds=cfg),
+                ts=flagged[0]["start"],
             )
-        seats = centre.sanctioned_seats
-        if r["observed"] > seats + r["band"]:
+        elif recent:
+            _auto_resolve(db, key, "auto: recent sessions within tolerance")
+        over = [r for r in recent if r["observed"] > centre.sanctioned_seats + r["band"]]
+        if over:
+            r = max(over, key=lambda r: r["observed"])
             _upsert_alert(
-                db, key=f"occ:{r['session_ref']}", centre=centre, kind="over_occupancy", severity="warning",
-                title=f"Over-occupancy: observed {r['observed']:g} vs {seats} sanctioned seats",
+                db, key=f"occ:{centre.code}:{batch}", centre=centre, kind="over_occupancy", severity="warning",
+                title=f"Over-occupancy, batch {batch}: observed {r['observed']:g} vs {centre.sanctioned_seats} sanctioned seats",
                 detail="More trainees observed than sanctioned seats; possible unsanctioned batch.",
-                evidence=dict(session_ref=r["session_ref"], observed=r["observed"], seats=seats, thumb_ids=r.get("thumb_ids", [])),
-                ts=r["start"],
+                evidence=dict(sessions=[x["session_ref"] for x in over], thumb_ids=r.get("thumb_ids", [])), ts=r["start"],
             )
 
 
@@ -129,6 +138,8 @@ def _item_alerts(db: Session, centre: Centre) -> None:
                                   thumb_ids=[c.thumb_id for c in run if c.thumb_id][:6], thresholds=cfg),
                     ts=run[-1].ts,
                 )
+            elif run and k != kind:
+                _auto_resolve(db, key, f"auto: superseded by {kind}")   # one alert per item, never both kinds
             elif not run and latest.state in ("present", "relocated"):
                 _auto_resolve(db, key, f"auto: item observed {latest.state} at {latest.ts:%Y-%m-%d %H:%M} UTC")
 
@@ -211,24 +222,46 @@ def evaluate_centre(db: Session, centre: Centre) -> list[Alert]:
 
 
 # ---------------------------------------------------------------- risk score
+def _ramp(v: float, lo: float, hi: float) -> float:
+    return 0.0 if v <= lo else 1.0 if v >= hi else (v - lo) / (hi - lo)
+
+
 def risk_score(db: Session, centre: Centre) -> dict:
+    """Noisy-OR of factor severities: one serious problem is enough for high risk; moderate ones add up.
+
+    risk = 100 * (1 - prod_k(1 - weight_k * severity_k)), each severity in [0, 1] (configs/rules.yaml: risk).
+    """
     cfg = CFG["risk"]
     since = now() - timedelta(days=cfg["window_days"])
     att = [r for r in session_attendance(db, centre) if r["gap_pct"] is not None]
     recent_att = [r for r in att if r["start"] >= since] or att[-5:]
-    attendance = min(1.0, statistics.mean(max(0.0, r["gap_pct"]) for r in recent_att)) if recent_att else 0.0
+    gap = statistics.mean(max(0.0, r["gap_pct"]) for r in recent_att) if recent_att else 0.0
 
     verifiable = db.scalars(select(InventoryItem).where(InventoryItem.centre_id == centre.id,
                                                         InventoryItem.camera_verifiable.is_(True))).all()
     open_alerts = db.scalars(select(Alert).where(Alert.centre_id == centre.id, Alert.status.in_(("open", "ack", "assigned")))).all()
     n_items = max(len(verifiable), 1)
-    infra = min(1.0, sum(a.kind in ("item_missing", "item_changed") for a in open_alerts) / n_items) if verifiable else 0.0
-    usage = min(1.0, sum(a.kind == "item_unused" for a in open_alerts) / n_items) if verifiable else 0.0
-    tamper = min(1.0, sum(a.kind == "tamper" for a in open_alerts) / 3)
+    missing = len({a.key.split(":")[-1] for a in open_alerts if a.kind in ("item_missing", "item_changed")})   # distinct items
+    unused = len({a.key.split(":")[-1] for a in open_alerts if a.kind == "item_unused"})
+    tamper = sum(a.kind == "tamper" for a in open_alerts)
     dev = db.get(DeviceStat, centre.id)
-    uptime = 1.0 - (dev.uptime_pct if dev else 1.0)
+    downtime = 1.0 - (dev.uptime_pct if dev else 1.0)
 
-    comps = dict(attendance=attendance, infra=infra, usage=usage, tamper=tamper, uptime=uptime)
-    score = round(sum(cfg["weights"][k] * v for k, v in comps.items()), 1)
+    sev = dict(
+        attendance=_ramp(gap, cfg["attendance_gap"][0], cfg["attendance_gap"][1]),
+        # one missing item is a medium concern; a large share of the sanctioned inventory is high
+        infra=0.0 if not missing else 0.35 + 0.65 * _ramp(missing / n_items, 0.0, cfg["infra_ratio_full"]),
+        usage=0.0 if not unused else 0.3 + 0.7 * _ramp(unused / n_items, 0.0, cfg["infra_ratio_full"]),
+        # a single tamper event can be accidental (someone blocks the lens); repeats are deliberate
+        tamper=0.0 if not tamper else min(1.0, 0.6 + 0.25 * (tamper - 1)),
+        uptime=_ramp(downtime, cfg["downtime"][0], cfg["downtime"][1]),
+    )
+    w = cfg["weights"]
+    keep = 1.0
+    for k, v in sev.items():
+        keep *= 1.0 - w[k] * v
+    score = round(100 * (1 - keep), 1)
     band = "high" if score >= cfg["bands"]["high"] else "medium" if score >= cfg["bands"]["medium"] else "low"
-    return dict(score=score, band=band, components={k: round(v, 3) for k, v in comps.items()}, weights=cfg["weights"])
+    return dict(score=score, band=band, components={k: round(v, 3) for k, v in sev.items()}, weights=w,
+                facts=dict(mean_gap_pct=round(gap, 3), missing_items=missing, unused_items=unused, tamper_alerts=tamper,
+                           downtime=round(downtime, 3), verifiable_items=len(verifiable)))

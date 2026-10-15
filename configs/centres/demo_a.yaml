@@ -1,0 +1,26 @@
+# Demo Centre A: honest centre. Free Mixkit classroom clips (licence: Mixkit Stock Video Free License),
+# time-lapse 1 s of clip = 3 min of centre time. Trainer area at the board is excluded from counting.
+device_id: edge-kn-a
+centre:
+  code: KN-DEMO-A
+  name: Demo Centre A (classroom)
+  state: Maharashtra
+  district: Pune
+  lat: 18.5204
+  lon: 73.8567
+  trade: Retail Sales Associate
+  scheme: PMKVY 4.0
+  sanctioned_seats: 30
+sampling: {interval_s: 180, window_s: 900}
+cameras:
+  - id: cam-class
+    name: Classroom
+    time_scale: 180
+    coverage: 0.9
+    training_zone: [[0, 0], [0.62, 0], [0.62, 0.15], [1, 0.15], [1, 1], [0, 1]]
+    segments:
+      - {source: ../../data/stock/35954.mp4, start_time: 2026-10-13T10:00:00+05:30}
+      - {source: ../../data/stock/35968.mp4, start_time: 2026-10-14T10:00:00+05:30}
+sessions:
+  - {batch: RSA-07, start: 2026-10-13T10:00:00+05:30, end: 2026-10-13T11:05:00+05:30}
+  - {batch: RSA-07, start: 2026-10-14T10:00:00+05:30, end: 2026-10-14T11:05:00+05:30}

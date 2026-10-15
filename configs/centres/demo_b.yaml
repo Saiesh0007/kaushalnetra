@@ -1,0 +1,25 @@
+# Demo Centre B: inflated attendance (claims 15 per session; far fewer present).
+# Free Mixkit lab clips, time-lapse 1 s = 3 min. Two takes of the same chemistry lab on two days.
+device_id: edge-kn-b
+centre:
+  code: KN-DEMO-B
+  name: Demo Centre B (lab)
+  state: Uttar Pradesh
+  district: Lucknow
+  lat: 26.8467
+  lon: 80.9462
+  trade: Lab Technician
+  scheme: PMKVY 4.0
+  sanctioned_seats: 20
+sampling: {interval_s: 180, window_s: 900}
+cameras:
+  - id: cam-lab
+    name: Chemistry lab
+    time_scale: 180
+    coverage: 1.0
+    segments:
+      - {source: ../../data/stock/24099.mp4, start_time: 2026-10-13T14:00:00+05:30}
+      - {source: ../../data/stock/23231.mp4, start_time: 2026-10-14T14:00:00+05:30}
+sessions:
+  - {batch: LAB-12, start: 2026-10-13T14:00:00+05:30, end: 2026-10-13T15:00:00+05:30}
+  - {batch: LAB-12, start: 2026-10-14T14:00:00+05:30, end: 2026-10-14T15:00:00+05:30}

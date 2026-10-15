@@ -1,2 +1,7 @@
 # Mock MIS: attendance the centres *claimed* (Design.md §2.3). In production this comes from the scheme MIS / AEBAS.
-- {centre_code: SMOKE-01, session_ref: SMOKE-01/SMOKE/2026-10-14, batch: SMOKE, start: 2026-10-14T10:00:00+05:30, end: 2026-10-14T11:00:00+05:30, claimed_count: 9}
+# Demo ground truth (visual count of trainees in the clips): A day1 ~11, A day2 ~11, B day1 4, B day2 3.
+- {centre_code: KN-DEMO-A, session_ref: KN-DEMO-A/RSA-07/2026-10-13, batch: RSA-07, start: 2026-10-13T10:00:00+05:30, end: 2026-10-13T11:05:00+05:30, claimed_count: 12}
+- {centre_code: KN-DEMO-A, session_ref: KN-DEMO-A/RSA-07/2026-10-14, batch: RSA-07, start: 2026-10-14T10:00:00+05:30, end: 2026-10-14T11:05:00+05:30, claimed_count: 12}
+- {centre_code: KN-DEMO-B, session_ref: KN-DEMO-B/LAB-12/2026-10-13, batch: LAB-12, start: 2026-10-13T14:00:00+05:30, end: 2026-10-13T15:00:00+05:30, claimed_count: 15}
+- {centre_code: KN-DEMO-B, session_ref: KN-DEMO-B/LAB-12/2026-10-14, batch: LAB-12, start: 2026-10-14T14:00:00+05:30, end: 2026-10-14T15:00:00+05:30, claimed_count: 15}
+- {centre_code: KN-DEMO-D, session_ref: KN-DEMO-D/DEO-03/2026-10-15, batch: DEO-03, start: 2026-10-15T09:30:00+05:30, end: 2026-10-15T10:30:00+05:30, claimed_count: 14}

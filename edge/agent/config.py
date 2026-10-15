@@ -42,6 +42,9 @@ class TamperCfg(BaseModel):
     loop_len: int = 5             # consecutive samples that must repeat
     loop_hash_dist: int = 6
     loop_min_motion: int = 12     # summed hash change inside the window; static rooms can't "loop"
+    loop_min_pixel_motion: float = 1.0
+    loop_motion_err: float = 0.25 # replayed footage repeats the frame-to-frame motion pattern closely
+    loop_history_s: float = 7200  # only compare against the last 2 hours
 
 
 class InfraCfg(BaseModel):
@@ -63,11 +66,18 @@ class InfraCfg(BaseModel):
     reloc_tie: float = 0.05            # appearance similarities this close count as a tie (identical models)
 
 
+class SegmentCfg(BaseModel):
+    source: str
+    start_time: datetime
+
+
 class CameraCfg(BaseModel):
     id: str
     name: str = ""
-    source: str
+    source: str = ""
+    segments: list[SegmentCfg] = []      # several recordings of this camera, played in order (multi-day demos)
     start_time: datetime | None = None   # wall-clock time of first frame, for recorded files
+    time_scale: float = 1.0              # demo time-lapse: 1 s of clip = time_scale s of centre time
     coverage: float = 1.0
     training_zone: list[list[float]] = [[0, 0], [1, 0], [1, 1], [0, 1]]   # normalised polygon
     anchor: str = "center"               # "center" or "bottom" of person box
@@ -109,6 +119,8 @@ def load(path: str | Path) -> AgentCfg:
     cfg = AgentCfg.model_validate(raw)
     rel = lambda p: p if ("://" in p or Path(p).is_absolute()) else str((path.parent / p).resolve())  # noqa: E731
     for cam in cfg.cameras:  # resolve file paths relative to the config file
-        cam.source = rel(cam.source)
+        cam.source = rel(cam.source) if cam.source else ""
+        for seg in cam.segments:
+            seg.source = rel(seg.source)
         cam.reference_images = [rel(r) for r in cam.reference_images]
     return cfg

@@ -146,6 +146,14 @@ class ItemVerifier:
         self.matcher = cv2.BFMatcher(cv2.NORM_HAMMING)
         self.items = [ItemRef(i, c, (b[0] * w, b[1] * h, b[2] * w, b[3] * h)) for i, c, b in items]
         self._calibrate(ref_frames)
+        # unregistered objects of the same classes already in the room at registration (spare chairs, etc.):
+        # they must never "explain away" a missing registered item as relocated
+        self.background: list[tuple[str, tuple]] = []
+        if self.det is not None:
+            for cls, b, _ in self.det(self.ref):
+                if max((iou(b, it.box) for it in self.items if it.class_name == cls), default=0.0) < 0.3:
+                    self.background.append((cls, b))
+            log.info("registration: %d unregistered same-class objects recorded as background", len(self.background))
 
     def _calibrate(self, ref_frames: list[np.ndarray]) -> None:
         rng = np.random.default_rng(0)
@@ -233,7 +241,9 @@ class ItemVerifier:
         for cls in {it.class_name for it in self.items}:
             cands = [k for k, r in results.items() if r.state == "candidate_missing" and self.items[k].class_name == cls]
             own = [boxes[j] for j, it in enumerate(self.items) if it.class_name == cls]
-            strays = [b for c, b, p in dets if c == cls and max((iou(b, o) for o in own), default=0) < 0.1]
+            bg = [self._warp(b, H) for c, b in self.background if c == cls]
+            strays = [b for c, b, p in dets if c == cls and max((iou(b, o) for o in own), default=0) < 0.1
+                      and max((iou(b, o) for o in bg), default=0) < 0.3]
             if not cands or not strays:
                 continue
             emb = self.emb([crop(frame, b) for b in strays])

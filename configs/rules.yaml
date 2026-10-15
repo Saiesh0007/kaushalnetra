@@ -15,6 +15,10 @@ usage:
 tamper:
   dedupe_minutes: 60
 risk:
+  # noisy-OR: risk = 100 * (1 - prod(1 - weight * severity)); severities in [0, 1]
   window_days: 14
-  weights: {attendance: 35, infra: 25, usage: 10, tamper: 20, uptime: 10}
+  weights: {attendance: 0.9, infra: 0.75, usage: 0.35, tamper: 0.9, uptime: 0.6}
+  attendance_gap: [0.10, 0.45]   # mean gap below 10% = no concern; 45%+ = full severity
+  infra_ratio_full: 0.3          # 30% of verifiable items missing = full severity
+  downtime: [0.05, 0.40]         # camera offline share of session time
   bands: {medium: 30, high: 60}

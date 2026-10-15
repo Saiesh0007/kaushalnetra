@@ -4,13 +4,15 @@ from __future__ import annotations
 import gzip
 import hashlib
 import hmac
+import html
+import json
 import os
 import re
 from datetime import datetime
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, TypeAdapter
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -185,6 +187,8 @@ async def ingest_events(request: Request, x_signature: str = Header(default=""),
                 db.add(dev)
             dev.device_id, dev.last_heartbeat, dev.queue_depth, dev.mode = batch.device_id, ts, ev.queue_depth, ev.mode
             dev.raw_video_bytes = max(dev.raw_video_bytes or 0, ev.raw_video_bytes)
+            if ev.uptime_pct is not None:
+                dev.uptime_pct = ev.uptime_pct
             db.flush()
             continue
         model = {S.OccupancyWindow: D.OccupancyWindow, S.ItemCheck: D.ItemCheck, S.ItemUsage: D.ItemUsage, S.Tamper: D.TamperEvent}[type(ev)]
@@ -375,6 +379,8 @@ def stats(db: Session = Depends(get_db)) -> dict:
     centres = db.scalars(select(D.Centre)).all()
     summaries = [centre_summary(db, c) for c in centres]
     devs = db.scalars(select(D.DeviceStat)).all()
+    real_ids = {c.id for c in centres if not c.simulated}
+    real_devs = [d for d in devs if d.centre_id in real_ids and (d.raw_video_bytes or 0) > 0]
     open_by_sev = dict(db.execute(select(D.Alert.severity, func.count()).where(D.Alert.status.in_(("open", "ack", "assigned")))
                                   .group_by(D.Alert.severity)).all())
     return dict(
@@ -382,5 +388,90 @@ def stats(db: Session = Depends(get_db)) -> dict:
         bands={b: sum(s["risk"]["band"] == b for s in summaries) for b in ("low", "medium", "high")},
         open_alerts=open_by_sev, bytes_sent=sum(d.bytes_sent or 0 for d in devs),
         raw_video_bytes=sum(d.raw_video_bytes or 0 for d in devs),
+        pipeline_bytes_sent=sum(d.bytes_sent or 0 for d in real_devs),
+        pipeline_raw_video_bytes=sum(d.raw_video_bytes or 0 for d in real_devs),
         cameras=db.scalar(select(func.count(D.Camera.id))),
     )
+
+
+# ---------------------------------------------------------------- transparency + inspection brief
+@app.get("/api/v1/centres/{code}/payload-sample")
+def payload_sample(code: str, db: Session = Depends(get_db)) -> dict:
+    """The latest events from this centre, re-serialised in the exact wire schema the edge device sends."""
+    c = centre_by_code(db, code)
+    evs: list = []
+    w = db.scalar(select(D.OccupancyWindow).where(D.OccupancyWindow.centre_id == c.id).order_by(D.OccupancyWindow.ts.desc()))
+    if w:
+        evs.append(S.OccupancyWindow(event_id=w.event_id, camera_id=w.cam_key, ts=w.ts, ts_end=w.ts_end, session_ref=w.session_ref,
+                                     count_median=w.count_median, count_p90=w.count_p90, n_frames=w.n_frames, thumb_id=w.thumb_id))
+    k = db.scalar(select(D.ItemCheck).where(D.ItemCheck.centre_id == c.id).order_by(D.ItemCheck.ts.desc()))
+    if k:
+        evs.append(S.ItemCheck(event_id=k.event_id, camera_id="cam", ts=k.ts, item_id=k.item_key, state=k.state, sim=k.sim,
+                               det_conf=k.det_conf, thumb_id=k.thumb_id))
+    t = db.scalar(select(D.TamperEvent).where(D.TamperEvent.centre_id == c.id).order_by(D.TamperEvent.ts.desc()))
+    if t:
+        evs.append(S.Tamper(event_id=t.event_id, camera_id=t.cam_key, ts=t.ts, kind=t.kind, details=t.details or {}, thumb_id=t.thumb_id))
+    raw = json.dumps([e.model_dump(mode="json") for e in evs]).encode()
+    return {"events": [e.model_dump(mode="json") for e in evs], "bytes_json": len(raw), "bytes_gzip": len(gzip.compress(raw))}
+
+
+@app.get("/api/v1/centres/{code}/brief", response_class=HTMLResponse)
+def inspection_brief(code: str, db: Session = Depends(get_db)) -> str:
+    """One-page inspection brief for a field visit. Print to PDF from the browser."""
+    c = centre_by_code(db, code)
+    s = centre_summary(db, c)
+    att = session_attendance(db, c)
+    alerts = db.scalars(select(D.Alert).where(D.Alert.centre_id == c.id, D.Alert.status.in_(("open", "ack", "assigned")))
+                        .order_by(D.Alert.severity, D.Alert.opened_at.desc())).all()
+    items = db.scalars(select(D.InventoryItem).where(D.InventoryItem.centre_id == c.id)).all()
+    latest = {}
+    for it in items:
+        k = db.scalar(select(D.ItemCheck).where(D.ItemCheck.centre_id == c.id, D.ItemCheck.item_key == it.item_key)
+                      .order_by(D.ItemCheck.ts.desc()))
+        latest[it.item_key] = k.state if k else "not checked"
+    esc = html.escape
+    flagged = [r for r in att if r["flagged"]]
+    rows_att = "".join(
+        f"<tr><td>{esc(str(r['start'])[:16])}</td><td>{esc(r['batch'])}</td><td>{r['claimed'] if r['claimed'] is not None else '—'}</td>"
+        f"<td>{r['observed'] if r['observed'] is not None else 'offline'}</td><td>{'FLAGGED' if r['flagged'] else ''}</td></tr>"
+        for r in att[-10:])
+    rows_al = "".join(f"<tr><td>{esc(a.severity)}</td><td>{esc(a.title)}</td><td>{esc(a.detail)}</td></tr>" for a in alerts) or \
+        "<tr><td colspan=3>No active alerts.</td></tr>"
+    rows_inv = "".join(f"<tr><td>{esc(i.item_key)}</td><td>{esc(i.class_name)}</td><td>{esc(latest[i.item_key])}</td>"
+                       f"<td>{'' if i.camera_verifiable else 'verify physically (not in camera view)'}</td><td>&#9744;</td></tr>"
+                       for i in items) or "<tr><td colspan=5>No sanctioned inventory registered.</td></tr>"
+    comps = "".join(f"<li>{esc(k)}: {v * s['risk']['weights'][k]:.1f} / {s['risk']['weights'][k]}</li>" for k, v in s["risk"]["components"].items())
+    return f"""<!doctype html><html><head><meta charset="utf-8"><title>Inspection brief: {esc(c.code)}</title>
+<style>body{{font:13px/1.45 system-ui,sans-serif;margin:28px;color:#111}}h1{{font-size:20px;margin:0}}h2{{font-size:14px;margin:18px 0 6px}}
+table{{border-collapse:collapse;width:100%}}td,th{{border:1px solid #ccc;padding:4px 6px;text-align:left;vertical-align:top}}
+.muted{{color:#666}}.box{{border:1px solid #ccc;border-radius:6px;padding:8px 10px;margin-top:6px}}@media print{{button{{display:none}}}}</style></head><body>
+<button onclick="print()" style="float:right">Print / save as PDF</button>
+<h1>Inspection brief: {esc(c.name)} ({esc(c.code)})</h1>
+<div class="muted">{esc(c.district)}, {esc(c.state)} · {esc(c.trade)} · {esc(c.scheme)} · {c.sanctioned_seats} sanctioned seats ·
+generated {D.now():%d %b %Y %H:%M} UTC by KaushalNetra{' · SIMULATED CENTRE' if c.simulated else ''}</div>
+<div class="box"><b>Risk score {s['risk']['score']:.0f}/100 ({s['risk']['band']})</b> · {len(flagged)} of {len([r for r in att if r['observed'] is not None])} observed sessions flagged · {len(alerts)} active alerts
+<ul style="margin:6px 0 0">{comps}</ul></div>
+<h2>Active alerts</h2><table><tr><th>Severity</th><th>Alert</th><th>Detail</th></tr>{rows_al}</table>
+<h2>Recent sessions: claimed vs observed</h2><table><tr><th>Start (UTC)</th><th>Batch</th><th>Claimed</th><th>Observed</th><th></th></tr>{rows_att}</table>
+<h2>Equipment checklist</h2><table><tr><th>Item</th><th>Type</th><th>Last camera check</th><th>Note</th><th>Verified on site</th></tr>{rows_inv}</table>
+<h2>On-site checks</h2><ol><li>Head-count the running batch and compare with today's biometric attendance.</li>
+<li>Physically verify every item marked "candidate_missing", "changed" or "not checked".</li>
+<li>Confirm camera position matches the registered view; check the edge device is powered and online.</li></ol>
+<p class="muted">Observed counts are aggregate presence estimates from privacy-preserving video analytics (no face recognition).
+They indicate where to look; they are not proof of wrongdoing. Inspector's signature: ____________________</p>
+</body></html>"""
+
+
+# ---------------------------------------------------------------- AI Inspector Copilot
+class CopilotIn(BaseModel):
+    question: str
+    history: list[dict] = []
+
+
+@app.post("/api/v1/copilot")
+def copilot_ask(body: CopilotIn, db: Session = Depends(get_db)) -> dict:
+    from .copilot import ask, llm_configured
+
+    out = ask(db, body.question[:2000], body.history)
+    out["provider"] = os.environ.get("KNETRA_LLM_MODEL") if llm_configured() else None
+    return out

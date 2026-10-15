@@ -21,7 +21,8 @@ class Sample:
     raw_bytes: int  # bytes of source video "consumed" so far, i.e. what a full upload would have cost
 
 
-def iter_samples(source: str, interval_s: float, start_time: datetime | None, realtime: bool = False) -> Iterator[Sample]:
+def iter_samples(source: str, interval_s: float, start_time: datetime | None, realtime: bool = False,
+                 time_scale: float = 1.0) -> Iterator[Sample]:
     if source.endswith(".csv"):
         yield from _snapshot_samples(source)
         return
@@ -31,18 +32,19 @@ def iter_samples(source: str, interval_s: float, start_time: datetime | None, re
     is_file = "://" not in source
     try:
         if is_file:
-            yield from _file_samples(cap, source, interval_s, start_time or datetime.now(IST), realtime)
+            yield from _file_samples(cap, source, interval_s, start_time or datetime.now(IST), realtime, time_scale)
         else:
             yield from _live_samples(cap, interval_s)
     finally:
         cap.release()
 
 
-def _file_samples(cap, source, interval_s, start_time, realtime) -> Iterator[Sample]:
+def _file_samples(cap, source, interval_s, start_time, realtime, time_scale=1.0) -> Iterator[Sample]:
+    """`interval_s` is in centre time; with time_scale > 1 a short clip stands in for a longer session."""
     fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
     size = os.path.getsize(source)
-    step = max(1, round(fps * interval_s))
+    step = max(1, round(fps * interval_s / time_scale))
     idx = 0
     t0 = time.monotonic()
     while True:
@@ -57,7 +59,10 @@ def _file_samples(cap, source, interval_s, start_time, realtime) -> Iterator[Sam
                 delay = video_t - (time.monotonic() - t0)
                 if delay > 0:
                     time.sleep(delay)
-            yield Sample(start_time + timedelta(seconds=video_t), frame, int(size * min(1.0, (idx + 1) / total)))
+            # raw bytes: what streaming this much *centre time* would cost (time-lapse demos stand in for real sessions)
+            centre_t = video_t * time_scale
+            raw = int(size * min(1.0, (idx + 1) / total)) if time_scale == 1.0 else int(centre_t * LIVE_BITRATE_BPS / 8)
+            yield Sample(start_time + timedelta(seconds=centre_t), frame, raw)
         idx += 1
 
 

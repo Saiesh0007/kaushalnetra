@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import threading
 import time
@@ -21,7 +22,7 @@ from .attendance import OccupancyAggregator, Zone
 from .capture import IST, iter_samples
 from .detect import PersonDetector
 from .infra import Embedder, ItemVerifier, OpenVocabDetector
-from .outbox import Outbox
+from .outbox import OFFLINE_FLAG, Outbox
 from .privacy import evidence_jpeg
 from .tamper import TamperDetector
 
@@ -45,8 +46,9 @@ class CameraWorker:
         self.raw_bytes = 0
         self.frames = 0
         self.latest_jpeg: bytes | None = None   # blurred preview for the local live view
+        self.preview = False
 
-    def _thumb(self, frame, dets, counted) -> bytes:
+    def _thumb(self, frame, dets, counted, width: int | None = None) -> bytes:
         zone = self.zone
 
         def overlay(img, scale):
@@ -58,7 +60,7 @@ class CameraWorker:
             cv2.rectangle(img, (0, 0), (w, 18), (0, 0, 0), -1)
             cv2.putText(img, f"{self.cam.id}  count={len(counted)}", (4, 13), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (255, 255, 255), 1)
 
-        return evidence_jpeg(frame, [d.box for d in dets], self.cfg.privacy.thumb_width, self.cfg.privacy.jpeg_quality, overlay)
+        return evidence_jpeg(frame, [d.box for d in dets], width or self.cfg.privacy.thumb_width, self.cfg.privacy.jpeg_quality, overlay)
 
     def _eid(self, *parts: str) -> str:
         """Deterministic event id: re-processing the same footage never duplicates events."""
@@ -78,7 +80,7 @@ class CameraWorker:
 
     def run(self) -> None:
         t0 = time.monotonic()
-        for s in iter_samples(self.cam.source, self.cfg.sampling.interval_s, self.cam.start_time, self.realtime):
+        for s in self._samples():
             self.frames += 1
             self.raw_bytes = s.raw_bytes
             h, w = s.frame.shape[:2]
@@ -96,12 +98,23 @@ class CameraWorker:
                 self._consider_for_infra(s.ts, s.frame, dets)
             if sess is not None:
                 self.agg.add(s.ts, self.cfg.session_ref(sess), sess.start, len(counted), thumb)
-            if self.realtime:
-                self.latest_jpeg = thumb()
+            if self.preview:
+                self.latest_jpeg = self._thumb(s.frame, dets, counted, width=720)
         self.agg.flush()
         self._run_infra_check()
         log.info("[%s] done: %d samples in %.1fs", self.cam.id, self.frames, time.monotonic() - t0)
 
+
+    def _samples(self):
+        segs = self.cam.segments or [C.SegmentCfg(source=self.cam.source, start_time=self.cam.start_time or datetime.now(IST))]
+        done = 0
+        for seg in segs:
+            last = 0
+            for s in iter_samples(seg.source, self.cfg.sampling.interval_s, seg.start_time, self.realtime, self.cam.time_scale):
+                last = s.raw_bytes
+                s.raw_bytes += done
+                yield s
+            done += last
 
     # -------------------------------------------------- equipment checks (Design.md §3)
     def _consider_for_infra(self, ts, frame, dets) -> None:
@@ -153,6 +166,68 @@ class CameraWorker:
         return evidence_jpeg(frame, [d.box for d in dets], 480, self.cfg.privacy.jpeg_quality, overlay)
 
 
+def serve_preview(workers: list[CameraWorker], port: int, outbox: Outbox) -> None:
+    """Local MJPEG stream of the blurred, annotated frames (demo control room). Never exposed beyond the LAN."""
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, *a):  # quiet
+            pass
+
+        def _json(self, obj) -> None:
+            body = json.dumps(obj).encode()
+            self.send_response(200)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_OPTIONS(self):
+            self.send_response(204)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST")
+            self.end_headers()
+
+        def do_POST(self):
+            # demo: simulate the centre's internet link going down / coming back
+            if self.path.startswith("/offline"):
+                if "on=1" in self.path:
+                    OFFLINE_FLAG.touch()
+                else:
+                    OFFLINE_FLAG.unlink(missing_ok=True)
+                self._json({"offline": OFFLINE_FLAG.exists()})
+            else:
+                self.send_error(404)
+
+        def do_GET(self):
+            if self.path == "/status":
+                self._json({"offline": OFFLINE_FLAG.exists(), "queue_depth": outbox.depth(), "bytes_sent": outbox.bytes_sent(),
+                            "cameras": [dict(id=w.cam.id, samples=w.frames) for w in workers]})
+                return
+            if self.path != "/stream.mjpg":
+                self.send_error(404)
+                return
+            self.send_response(200)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
+            self.end_headers()
+            last = None
+            try:
+                while True:
+                    jpg = next((w.latest_jpeg for w in workers if w.latest_jpeg), None)
+                    if jpg is not None and jpg is not last:
+                        self.wfile.write(b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: " + str(len(jpg)).encode() + b"\r\n\r\n" + jpg + b"\r\n")
+                        last = jpg
+                    time.sleep(0.1)
+            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                return
+
+    srv = ThreadingHTTPServer(("127.0.0.1", port), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    log.info("preview at http://127.0.0.1:%d/stream.mjpg", port)
+
+
 def register(cfg: C.AgentCfg) -> None:
     spec = cfg.centre.model_copy(update={"cameras": cfg.centre.cameras or [
         CameraSpec(id=c.id, name=c.name, coverage=c.coverage, mode=cfg.mode) for c in cfg.cameras]})
@@ -166,6 +241,8 @@ def main() -> None:
     ap.add_argument("--config", required=True)
     ap.add_argument("--realtime", action="store_true", help="pace file sources at real speed (live demo)")
     ap.add_argument("--no-register", action="store_true")
+    ap.add_argument("--preview", action="store_true", help="serve a blurred live preview for the control room")
+    ap.add_argument("--preview-port", type=int, default=8001)
     ap.add_argument("--drain-timeout", type=float, default=120)
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s", datefmt="%H:%M:%S")
@@ -184,6 +261,10 @@ def main() -> None:
         infra_models = (Embedder(cfg.infra.embedder),
                         OpenVocabDetector(cfg.infra.open_vocab, vocab, cfg.infra.open_vocab_conf, cfg.infra.open_vocab_imgsz) if cfg.infra.open_vocab else None)
     workers = [CameraWorker(cfg, cam, detector, outbox, args.realtime, infra_models) for cam in cfg.cameras]
+    if args.preview:
+        for w in workers:
+            w.preview = True
+        serve_preview(workers, args.preview_port, outbox)
     threads = [threading.Thread(target=w.run, name=w.cam.id) for w in workers]
     for t in threads:
         t.start()

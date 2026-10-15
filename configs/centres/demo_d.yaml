@@ -1,0 +1,23 @@
+# Demo Centre D: tampered feed. Classroom clip with a replayed section (loop), a frozen still and a blacked-out lens,
+# built by ffmpeg from a free Mixkit clip (data/stock/centre_d_tamper.mp4). 1 sample per clip second.
+device_id: edge-kn-d
+centre:
+  code: KN-DEMO-D
+  name: Demo Centre D (classroom)
+  state: Bihar
+  district: Patna
+  lat: 25.5941
+  lon: 85.1376
+  trade: Domestic Data Entry Operator
+  scheme: PMKVY 4.0
+  sanctioned_seats: 25
+sampling: {interval_s: 60, window_s: 900}
+cameras:
+  - id: cam-class
+    name: Classroom
+    time_scale: 60
+    training_zone: [[0, 0], [0.62, 0], [0.62, 0.15], [1, 0.15], [1, 1], [0, 1]]
+    segments:
+      - {source: ../../data/stock/centre_d_tamper.mp4, start_time: 2026-10-15T09:30:00+05:30}
+sessions:
+  - {batch: DEO-03, start: 2026-10-15T09:30:00+05:30, end: 2026-10-15T10:30:00+05:30}

@@ -1,0 +1,1 @@
+{"root":["./src/api.ts","./src/main.tsx","./src/components/attendancechart.tsx","./src/components/indiamap.tsx","./src/components/status.tsx","./src/components/thumb.tsx","./src/components/live.tsx","./src/pages/alerts.tsx","./src/pages/centre.tsx","./src/pages/controlroom.tsx","./src/pages/copilot.tsx","./src/pages/overview.tsx"],"version":"5.6.3"}
