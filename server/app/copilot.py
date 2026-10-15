@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from typing import Any, Callable
 
 import httpx
@@ -147,8 +148,12 @@ def ask_llm(db: Session, question: str, history: list[dict]) -> dict:
     trace = []
     with httpx.Client(timeout=90) as client:
         for _ in range(5):
-            r = client.post(f"{base}/chat/completions", headers=headers, json={
-                "model": os.environ["KNETRA_LLM_MODEL"], "messages": msgs, "tools": TOOLS_SPEC, "temperature": 0.2})
+            for attempt in range(3):  # free tiers return 429/503 under load: brief backoff, then give up to offline
+                r = client.post(f"{base}/chat/completions", headers=headers, json={
+                    "model": os.environ["KNETRA_LLM_MODEL"], "messages": msgs, "tools": TOOLS_SPEC, "temperature": 0.2})
+                if r.status_code not in (429, 500, 503):
+                    break
+                time.sleep(1.5 * (attempt + 1))
             r.raise_for_status()
             m = r.json()["choices"][0]["message"]
             calls = m.get("tool_calls") or []

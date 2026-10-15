@@ -23,6 +23,18 @@ from common import schemas as S
 from . import db as D
 from .rules import evaluate_centre, risk_score, session_attendance
 
+def _load_dotenv() -> None:
+    """Minimal .env loader (repo root). Real environment variables take precedence."""
+    f = Path(__file__).resolve().parents[2] / ".env"
+    if f.exists():
+        for line in f.read_text(encoding="utf-8").splitlines():
+            if "=" in line and not line.lstrip().startswith("#"):
+                k, v = line.split("=", 1)
+                if v.strip():
+                    os.environ.setdefault(k.strip(), v.strip())
+
+
+_load_dotenv()
 EDGE_SECRET = os.environ.get("KNETRA_EDGE_SECRET", "dev-secret").encode()
 THUMB_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 

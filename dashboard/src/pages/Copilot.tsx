@@ -19,24 +19,44 @@ const SUGGEST = [
   "कुल स्थिति का सारांश दें",
 ];
 
-function Rich({ text }: { text: string }) {
-  // tiny renderer: **bold**, bullet lines, centre codes and brief links become links
+function Inline({ text }: { text: string }) {
+  // **bold**, `code`, centre codes -> links, brief paths -> links
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`|KN-[A-Z]+-[0-9A-E]+|\/api\/v1\/centres\/[A-Z0-9-]+\/brief)/g);
   return (
     <>
-      {text.split("\n").map((line, i) => {
-        const parts = line.split(/(\*\*[^*]+\*\*|KN-[A-Z]+-[0-9A-D]+|\/api\/v1\/centres\/[A-Z0-9-]+\/brief)/g);
-        return (
-          <div key={i} style={{ paddingLeft: line.startsWith("- ") ? 12 : 0, minHeight: 4 }}>
-            {parts.map((p, j) =>
-              p.startsWith("**") ? <b key={j}>{p.slice(2, -2)}</b>
-              : /^KN-[A-Z]+-[0-9A-D]+$/.test(p) ? <Link key={j} to={`/centres/${p}`}>{p}</Link>
-              : p.startsWith("/api/v1/") ? <a key={j} href={API + p} target="_blank" rel="noreferrer">open brief</a>
-              : <span key={j}>{line.startsWith("- ") && j === 0 ? "• " + p.slice(2) : p}</span>,
-            )}
-          </div>
-        );
+      {parts.map((p, j) => {
+        if (p.startsWith("**") && p.endsWith("**")) return <b key={j}><Inline text={p.slice(2, -2)} /></b>;
+        if (p.startsWith("`") && p.endsWith("`")) return <Inline key={j} text={p.slice(1, -1)} />;
+        if (/^KN-[A-Z]+-[0-9A-E]+$/.test(p)) return <Link key={j} to={`/centres/${p}`}>{p}</Link>;
+        if (/^\/api\/v1\/centres\/[A-Z0-9-]+\/brief$/.test(p)) return <a key={j} href={API + p} target="_blank" rel="noreferrer">open inspection brief</a>;
+        return <span key={j}>{p}</span>;
       })}
     </>
+  );
+}
+
+function Rich({ text }: { text: string }) {
+  // small markdown subset: headings, bullets (nested by indent), rules, paragraphs
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+      {text.split("\n").map((raw, i) => {
+        const indent = raw.length - raw.trimStart().length;
+        const line = raw.trim();
+        if (!line) return <div key={i} style={{ height: 4 }} />;
+        if (/^-{3,}$/.test(line)) return <hr key={i} style={{ border: 0, borderTop: "1px solid var(--border)", width: "100%", margin: "4px 0" }} />;
+        const h = line.match(/^(#{1,4})\s+(.*)$/);
+        if (h) return <div key={i} style={{ fontWeight: 600, marginTop: 6 }}><Inline text={h[2]} /></div>;
+        const b = line.match(/^([*-]|\d+\.)\s+(.*)$/);
+        if (b)
+          return (
+            <div key={i} style={{ display: "flex", gap: 6, paddingLeft: 4 + Math.min(indent, 8) * 6 }}>
+              <span className="muted">{/^\d/.test(b[1]) ? b[1] : "•"}</span>
+              <span><Inline text={b[2]} /></span>
+            </div>
+          );
+        return <div key={i}><Inline text={line} /></div>;
+      })}
+    </div>
   );
 }
 
