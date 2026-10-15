@@ -47,6 +47,7 @@ class CameraWorker:
         self.frames = 0
         self.latest_jpeg: bytes | None = None   # blurred preview for the local live view
         self.preview = False
+        self.speed = 1.0
 
     def _thumb(self, frame, dets, counted, width: int | None = None) -> bytes:
         zone = self.zone
@@ -110,7 +111,8 @@ class CameraWorker:
         done = 0
         for seg in segs:
             last = 0
-            for s in iter_samples(seg.source, self.cfg.sampling.interval_s, seg.start_time, self.realtime, self.cam.time_scale):
+            for s in iter_samples(seg.source, self.cfg.sampling.interval_s, seg.start_time, self.realtime, self.cam.time_scale,
+                                  self.speed):
                 last = s.raw_bytes
                 s.raw_bytes += done
                 yield s
@@ -243,6 +245,7 @@ def main() -> None:
     ap.add_argument("--no-register", action="store_true")
     ap.add_argument("--preview", action="store_true", help="serve a blurred live preview for the control room")
     ap.add_argument("--preview-port", type=int, default=8001)
+    ap.add_argument("--speed", type=float, default=1.0, help="with --realtime: playback speed (0.5 = half speed)")
     ap.add_argument("--drain-timeout", type=float, default=120)
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s", datefmt="%H:%M:%S")
@@ -261,6 +264,8 @@ def main() -> None:
         infra_models = (Embedder(cfg.infra.embedder),
                         OpenVocabDetector(cfg.infra.open_vocab, vocab, cfg.infra.open_vocab_conf, cfg.infra.open_vocab_imgsz) if cfg.infra.open_vocab else None)
     workers = [CameraWorker(cfg, cam, detector, outbox, args.realtime, infra_models) for cam in cfg.cameras]
+    for w in workers:
+        w.speed = args.speed
     if args.preview:
         for w in workers:
             w.preview = True

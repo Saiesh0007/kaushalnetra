@@ -1,8 +1,8 @@
 {
  "dataset": "40 randomised snapshots x 2 rooms (Unsplash photos + ml/sim events), seed 1",
  "checks": 276,
- "anomaly_precision": 0.954,
- "anomaly_recall": 0.756,
+ "anomaly_precision": 0.963,
+ "anomaly_recall": 0.963,
  "false_alarm_rate_present": 0.019,
  "est_alert_false_alarm_rate": 7e-06,
  "occlusion_handled": 1.0,
@@ -17,8 +17,7 @@
   "turned_detected": 11
  },
  "confusion": {
-  "anomaly->anomaly": 62,
-  "anomaly->ok": 17,
+  "anomaly->anomaly": 79,
   "anomaly->unverifiable": 3,
   "ok->anomaly": 3,
   "ok->ok": 153,
@@ -26,81 +25,16 @@
   "unverifiable->unverifiable": 36
  },
  "by_event": {
-  "covered->anomaly": 31,
-  "covered->ok": 12,
+  "covered->anomaly": 43,
   "covered->unverifiable": 2,
   "occluded->unverifiable": 36,
   "present->anomaly": 3,
   "present->ok": 153,
   "present->unverifiable": 2,
-  "removed->anomaly": 31,
-  "removed->ok": 5,
+  "removed->anomaly": 36,
   "removed->unverifiable": 1
  },
  "error_examples": [
-  {
-   "room": "classroom",
-   "snap": 1,
-   "item": "CH-01",
-   "event": "covered",
-   "dim": true,
-   "state": "relocated",
-   "sim": 0.137
-  },
-  {
-   "room": "classroom",
-   "snap": 2,
-   "item": "CH-02",
-   "event": "covered",
-   "dim": false,
-   "state": "relocated",
-   "sim": 0.134
-  },
-  {
-   "room": "classroom",
-   "snap": 5,
-   "item": "CH-01",
-   "event": "covered",
-   "dim": false,
-   "state": "relocated",
-   "sim": 0.123
-  },
-  {
-   "room": "classroom",
-   "snap": 10,
-   "item": "CH-01",
-   "event": "covered",
-   "dim": false,
-   "state": "relocated",
-   "sim": 0.094
-  },
-  {
-   "room": "classroom",
-   "snap": 12,
-   "item": "CH-02",
-   "event": "removed",
-   "dim": false,
-   "state": "relocated",
-   "sim": 0.346
-  },
-  {
-   "room": "classroom",
-   "snap": 14,
-   "item": "MON-01",
-   "event": "covered",
-   "dim": false,
-   "state": "relocated",
-   "sim": 0.283
-  },
-  {
-   "room": "classroom",
-   "snap": 14,
-   "item": "CH-02",
-   "event": "removed",
-   "dim": false,
-   "state": "relocated",
-   "sim": 0.37
-  },
   {
    "room": "classroom",
    "snap": 15,
@@ -122,15 +56,6 @@
   {
    "room": "classroom",
    "snap": 16,
-   "item": "CH-01",
-   "event": "covered",
-   "dim": false,
-   "state": "relocated",
-   "sim": 0.081
-  },
-  {
-   "room": "classroom",
-   "snap": 16,
    "item": "CH-02",
    "event": "present",
    "dim": false,
@@ -139,13 +64,49 @@
   },
   {
    "room": "classroom",
-   "snap": 17,
-   "item": "CH-01",
+   "snap": 18,
+   "item": "MON-01",
+   "event": "present",
+   "dim": true,
+   "state": "unverifiable",
+   "sim": null
+  },
+  {
+   "room": "classroom",
+   "snap": 18,
+   "item": "CH-02",
+   "event": "present",
+   "dim": true,
+   "state": "changed",
+   "sim": 0.731
+  },
+  {
+   "room": "classroom",
+   "snap": 22,
+   "item": "MON-01",
+   "event": "removed",
+   "dim": false,
+   "state": "unverifiable",
+   "sim": null
+  },
+  {
+   "room": "classroom",
+   "snap": 22,
+   "item": "CH-02",
+   "event": "present",
+   "dim": false,
+   "state": "changed",
+   "sim": 0.757
+  },
+  {
+   "room": "classroom",
+   "snap": 39,
+   "item": "CH-02",
    "event": "covered",
    "dim": false,
-   "state": "relocated",
-   "sim": 0.149
+   "state": "unverifiable",
+   "sim": null
   }
  ],
- "seconds": 572
+ "seconds": 833
 }

@@ -22,7 +22,7 @@ class Sample:
 
 
 def iter_samples(source: str, interval_s: float, start_time: datetime | None, realtime: bool = False,
-                 time_scale: float = 1.0) -> Iterator[Sample]:
+                 time_scale: float = 1.0, speed: float = 1.0) -> Iterator[Sample]:
     if source.endswith(".csv"):
         yield from _snapshot_samples(source)
         return
@@ -32,14 +32,14 @@ def iter_samples(source: str, interval_s: float, start_time: datetime | None, re
     is_file = "://" not in source
     try:
         if is_file:
-            yield from _file_samples(cap, source, interval_s, start_time or datetime.now(IST), realtime, time_scale)
+            yield from _file_samples(cap, source, interval_s, start_time or datetime.now(IST), realtime, time_scale, speed)
         else:
             yield from _live_samples(cap, interval_s)
     finally:
         cap.release()
 
 
-def _file_samples(cap, source, interval_s, start_time, realtime, time_scale=1.0) -> Iterator[Sample]:
+def _file_samples(cap, source, interval_s, start_time, realtime, time_scale=1.0, speed=1.0) -> Iterator[Sample]:
     """`interval_s` is in centre time; with time_scale > 1 a short clip stands in for a longer session."""
     fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
@@ -56,7 +56,7 @@ def _file_samples(cap, source, interval_s, start_time, realtime, time_scale=1.0)
                 return
             video_t = idx / fps
             if realtime:
-                delay = video_t - (time.monotonic() - t0)
+                delay = video_t / speed - (time.monotonic() - t0)
                 if delay > 0:
                     time.sleep(delay)
             # raw bytes: what streaming this much *centre time* would cost (time-lapse demos stand in for real sessions)

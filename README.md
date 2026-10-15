@@ -50,21 +50,37 @@ SIH/
 
 ## Quick start
 
-> The commands below show the planned workflow. See [docs/Phases.md](docs/Phases.md) for current status.
-
 ```bash
-# Backend
-cd server && python -m venv .venv && .venv/Scripts/activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload            # http://localhost:8000/docs
+# one-time setup (Python 3.12 + Node 20+)
+uv venv --python 3.12 .venv
+uv pip install --python .venv/Scripts/python.exe torch torchvision --index-url https://download.pytorch.org/whl/cpu
+uv pip install --python .venv/Scripts/python.exe -r edge/requirements.txt -r server/requirements.txt
+cd dashboard && npm install && npm run build && cd ..
 
-# Edge agent: run on a sample video in place of an RTSP camera
-cd edge && pip install -r requirements.txt
-python -m agent --config configs/centre_demo_a.yaml --source ../data/centre_a.mp4
+# run the whole demo: API + dashboard on http://127.0.0.1:8000 (seeds the demo database on first run)
+.venv/Scripts/python scripts/demo.py
 
-# Dashboard
-cd dashboard && npm install && npm run dev   # http://localhost:5173
+# in a second terminal: play a centre's footage live through the edge AI (blurred preview + live alert)
+.venv/Scripts/python scripts/demo.py live b
 ```
+
+| What | Command |
+|---|---|
+| Re-seed the demo from scratch | delete `server/var`, then `python scripts/seed_demo.py` |
+| Equipment / tamper / count / bandwidth evaluations | `python ml/eval/infra_eval.py`, `tamper_eval.py`, `count_eval.py --head <weights>`, `bandwidth_eval.py` |
+| Regenerate the simulated equipment scenario | `python scripts/make_centre_c.py` |
+| Dashboard dev server (hot reload) | `cd dashboard && npm run dev` → http://127.0.0.1:5173 |
+| AI copilot with an LLM (optional, free tiers) | set `KNETRA_LLM_BASE_URL`, `KNETRA_LLM_API_KEY`, `KNETRA_LLM_MODEL` (any OpenAI-compatible endpoint); without them the copilot answers offline |
+
+## Data sources (all free)
+
+| Data | Use | Licence |
+|---|---|---|
+| SCUT-HEAD PartA (2,000 classroom CCTV frames, 67k labelled heads) | train + evaluate the head detector | free for academic research |
+| Mixkit stock clips (classroom, labs) | AI-pipeline demo centres A, B, D | Mixkit Stock Video Free License |
+| Unsplash room photos | equipment scenarios (`ml/sim`) with exact ground truth | Unsplash License |
+| OpenCV `vtest.avi` | smoke + tamper tests | OpenCV sample data |
+| DataMeet India boundaries | dashboard map (official composite boundary) | CC BY 4.0 |
 
 ## Documentation
 
