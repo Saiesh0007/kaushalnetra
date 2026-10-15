@@ -15,7 +15,7 @@ from datetime import datetime
 import cv2
 import httpx
 
-from common.schemas import CameraSpec, Heartbeat, ItemCheck, OccupancyWindow, Tamper
+from common.schemas import CameraSpec, Heartbeat, ItemCheck, ItemUsage, OccupancyWindow, Tamper
 
 from . import config as C
 from .attendance import OccupancyAggregator, Zone
@@ -25,6 +25,7 @@ from .infra import Embedder, ItemVerifier, OpenVocabDetector
 from .outbox import OFFLINE_FLAG, Outbox
 from .privacy import evidence_jpeg
 from .tamper import TamperDetector
+from .usage import UsageTracker
 
 log = logging.getLogger("agent")
 
@@ -38,6 +39,8 @@ class CameraWorker:
         if cam.reference_images and items and infra_models:
             refs = [cv2.imread(p) for p in cam.reference_images]
             self.verifier = ItemVerifier(items, [r for r in refs if r is not None], *infra_models, cfg.infra)
+        self.usage = UsageTracker(self.verifier) if self.verifier is not None and cfg.sessions else None
+        self.usage_session: tuple[str, object] | None = None   # (session_ref, last ts) being accumulated
         self.slot: int | None = None
         self.slot_best: tuple | None = None   # (n_people, ts, frame, dets) of the emptiest frame in the current slot
         self.zone = Zone(cam.training_zone, cam.anchor)
@@ -99,9 +102,11 @@ class CameraWorker:
                 self._consider_for_infra(s.ts, s.frame, dets)
             if sess is not None:
                 self.agg.add(s.ts, self.cfg.session_ref(sess), sess.start, len(counted), thumb)
+            self._track_usage(s.ts, s.frame, dets, self.cfg.session_ref(sess) if sess else None)
             if self.preview:
                 self.latest_jpeg = self._thumb(s.frame, dets, counted, width=720)
         self.agg.flush()
+        self._track_usage(None, None, [], None)
         self._run_infra_check()
         log.info("[%s] done: %d samples in %.1fs", self.cam.id, self.frames, time.monotonic() - t0)
 
@@ -117,6 +122,24 @@ class CameraWorker:
                 s.raw_bytes += done
                 yield s
             done += last
+
+    # -------------------------------------------------- usage evidence (Design.md §4)
+    def _track_usage(self, ts, frame, dets, session_ref) -> None:
+        if self.usage is None:
+            return
+        if self.usage_session and self.usage_session[0] != session_ref:
+            ref, last_ts = self.usage_session
+            for item_id, inter, obs in self.usage.pop(ref, self.cfg.sampling.interval_s):
+                self.outbox.put(ItemUsage(event_id=self._eid("usage", item_id, ref), camera_id=self.cam.id, ts=last_ts,
+                                          item_id=item_id, session_ref=ref, interaction_min=inter, observed_min=obs))
+                log.info("[%s] usage %s %s: %.1f of %.1f min", self.cam.id, ref, item_id, inter, obs)
+            self.usage_session = None
+        if session_ref is None or frame is None:
+            return
+        rw, rh = self.verifier.size
+        sx, sy = rw / frame.shape[1], rh / frame.shape[0]
+        self.usage.add(session_ref, frame, [(d.x1 * sx, d.y1 * sy, d.x2 * sx, d.y2 * sy) for d in dets])
+        self.usage_session = (session_ref, ts)
 
     # -------------------------------------------------- equipment checks (Design.md §3)
     def _consider_for_infra(self, ts, frame, dets) -> None:

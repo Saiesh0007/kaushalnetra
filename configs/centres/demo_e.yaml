@@ -1,0 +1,29 @@
+# Demo Centre E: computer lab in use. Shows equipment usage evidence ("apparent operability"):
+# a monitor someone works at accumulates interaction minutes; idle monitors stay at zero.
+# Free Mixkit clip 23232 (handheld, slow camera drift: item boxes are re-aligned to the reference each sample).
+device_id: edge-kn-e
+centre:
+  code: KN-DEMO-E
+  name: Demo Centre E (computer lab)
+  state: Kerala
+  district: Thiruvananthapuram
+  lat: 8.5241
+  lon: 76.9366
+  trade: IT-ITeS
+  scheme: PMKVY 4.0
+  sanctioned_seats: 12
+  items:
+    - {id: PC-E1, class_name: computer monitor, camera_id: cam-lab, bbox: [0.6804, 0.4557, 0.8422, 0.9428], description: Workstation 1}
+    - {id: PC-E2, class_name: computer monitor, camera_id: cam-lab, bbox: [0.8869, 0.5626, 0.9892, 0.8444], description: Workstation 2}
+    - {id: PC-E3, class_name: computer monitor, camera_id: cam-lab, bbox: [0.1164, 0.4958, 0.193, 0.7319], description: Workstation 3 (added by hand at registration)}
+infra: {check_interval_s: 1800, max_drift: 0.5}   # stock clip is handheld; a fixed CCTV camera uses the default 0.05
+sampling: {interval_s: 60, window_s: 900}
+cameras:
+  - id: cam-lab
+    name: Computer lab
+    time_scale: 60
+    reference_images: [../../data/sim/centre_e/ref_0.jpg, ../../data/sim/centre_e/ref_1.jpg]
+    segments:
+      - {source: ../../data/stock/23232.mp4, start_time: 2026-10-15T11:00:00+05:30}
+sessions:
+  - {batch: ITES-02, start: 2026-10-15T11:00:00+05:30, end: 2026-10-15T11:31:00+05:30}

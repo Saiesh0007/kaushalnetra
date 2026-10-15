@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { API, ago, api, fmtBytes, fmtDate, fmtDateTime, fmtInt, type Alert, type Centre as C, type Item, type SessionRow } from "../api";
 import { AttendanceChart, RiskBreakdown } from "../components/AttendanceChart";
 import { useLive } from "../components/live";
-import { BandChip, ItemChip, SeverityChip, StatusChip, itemTone, toneColor } from "../components/Status";
+import { BandChip, Chip, ItemChip, SeverityChip, StatusChip, itemTone, toneColor } from "../components/Status";
 import { Lightbox, Thumb } from "../components/Thumb";
 import { AlertDrawer } from "./Alerts";
 
@@ -169,7 +169,20 @@ export function Centre() {
                     <b>{it.item_key}</b>
                     <div className="muted" style={{ fontSize: 12 }}>{it.class_name}{it.cam_key ? ` · ${it.cam_key}` : ""}</div>
                   </div>
-                  <ItemChip state={it.camera_verifiable ? it.state : "not_checked"} />
+                  {(() => {
+                    if (!it.camera_verifiable) return <ItemChip state="not_checked" />;
+                    // mirror the alert rule: an anomaly is only confirmed after 3 consecutive anomalous checks
+                    let run = 0;
+                    for (let k = it.history.length - 1; k >= 0; k--) {
+                      const st = it.history[k].state;
+                      if (st === "candidate_missing" || st === "changed") run++;
+                      else if (st === "unverifiable" || st === "uncertain") continue;
+                      else break;
+                    }
+                    if ((it.state === "candidate_missing" || it.state === "changed") && run < 3)
+                      return <Chip tone="warning" label={`Unconfirmed · re-checking (${run}/3)`} />;
+                    return <ItemChip state={it.state} />;
+                  })()}
                 </div>
                 {it.camera_verifiable ? (
                   <>
@@ -182,6 +195,20 @@ export function Centre() {
                     <div className="muted" style={{ fontSize: 12 }}>
                       Last check {fmtDateTime(it.last_checked)}{it.sim !== null ? ` · similarity ${it.sim}` : ""}
                     </div>
+                    {it.usage.length > 0 && (() => {
+                      const u = it.usage[it.usage.length - 1];
+                      const share = u.observed_min ? u.interaction_min / u.observed_min : 0;
+                      return (
+                        <div style={{ marginTop: 10 }}>
+                          <div className="row" style={{ justifyContent: "space-between", fontSize: 12.5 }}>
+                            <span className="secondary">Observed use, last session</span>
+                            <span><b>{u.interaction_min}</b><span className="muted"> of {u.observed_min} min</span></span>
+                          </div>
+                          <div className="bar-track" style={{ marginTop: 4 }}><div className="bar-fill" style={{ width: `${share * 100}%` }} /></div>
+                          {u.interaction_min === 0 && <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>No one at this station while trainees were present.</div>}
+                        </div>
+                      );
+                    })()}
                     {it.thumb_id && <div style={{ marginTop: 8 }}><Thumb id={it.thumb_id} w={218} onOpen={setBig} /></div>}
                   </>
                 ) : (

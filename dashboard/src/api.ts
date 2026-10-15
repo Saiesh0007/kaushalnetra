@@ -61,7 +61,7 @@ export interface Item {
   last_checked: string | null;
   thumb_id: string | null;
   history: { ts: string; state: string; sim: number | null }[];
-  usage: { session_ref: string; interaction_min: number }[];
+  usage: { session_ref: string; interaction_min: number; observed_min: number }[];
 }
 export interface Alert {
   id: number;

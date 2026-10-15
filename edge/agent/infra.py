@@ -169,7 +169,7 @@ class ItemVerifier:
                      it.id, sims.min(), sims.max(), it.t_present, it.t_missing)
 
     # -------------------------------------------------- alignment (camera-moved check)
-    def align(self, frame: np.ndarray) -> tuple[np.ndarray | None, int]:
+    def align(self, frame: np.ndarray, max_drift: float | None = None) -> tuple[np.ndarray | None, int]:
         g = cv2.cvtColor(cv2.resize(frame, self.size), cv2.COLOR_BGR2GRAY)
         kp, desc = self.orb.detectAndCompute(g, None)
         if desc is None or self.ref_desc is None or len(kp) < 10:
@@ -187,7 +187,7 @@ class ItemVerifier:
         # a camera that was turned still matches the wall; require the scene to stay where it was registered
         corners = np.float32([[0, 0], [self.size[0], 0], [self.size[0], self.size[1]], [0, self.size[1]]]).reshape(-1, 1, 2)
         drift = float(np.abs(cv2.perspectiveTransform(corners, H) - corners).max()) / self.size[0]
-        if drift > self.cfg.max_drift:
+        if drift > (self.cfg.max_drift if max_drift is None else max_drift):
             return None, inliers
         return H, inliers
 

@@ -5,3 +5,4 @@
 - {centre_code: KN-DEMO-B, session_ref: KN-DEMO-B/LAB-12/2026-10-13, batch: LAB-12, start: 2026-10-13T14:00:00+05:30, end: 2026-10-13T15:00:00+05:30, claimed_count: 15}
 - {centre_code: KN-DEMO-B, session_ref: KN-DEMO-B/LAB-12/2026-10-14, batch: LAB-12, start: 2026-10-14T14:00:00+05:30, end: 2026-10-14T15:00:00+05:30, claimed_count: 15}
 - {centre_code: KN-DEMO-D, session_ref: KN-DEMO-D/DEO-03/2026-10-15, batch: DEO-03, start: 2026-10-15T09:30:00+05:30, end: 2026-10-15T10:30:00+05:30, claimed_count: 14}
+- {centre_code: KN-DEMO-E, session_ref: KN-DEMO-E/ITES-02/2026-10-15, batch: ITES-02, start: 2026-10-15T11:00:00+05:30, end: 2026-10-15T11:31:00+05:30, claimed_count: 3}

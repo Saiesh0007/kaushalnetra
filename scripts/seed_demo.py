@@ -23,7 +23,7 @@ def run(*args):
 
 if not (ROOT / "data/sim/centre_c/manifest.csv").exists():
     run("scripts/make_centre_c.py")
-for c in ("demo_a", "demo_b", "demo_c", "demo_d"):
+for c in ("demo_a", "demo_b", "demo_c", "demo_d", "demo_e"):
     run("-m", "edge.agent", "--config", f"configs/centres/{c}.yaml")
 run("scripts/push_claims.py", a.url)
 if not a.skip_fleet:

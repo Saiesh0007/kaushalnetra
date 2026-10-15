@@ -323,7 +323,7 @@ def get_inventory(code: str, db: Session = Depends(get_db)) -> list[dict]:
                         sim=latest.sim if latest else None, last_checked=iso(latest.ts) if latest else None,
                         thumb_id=latest.thumb_id if latest else None,
                         history=[dict(ts=iso(k.ts), state=k.state, sim=k.sim) for k in reversed(checks)],
-                        usage=[dict(session_ref=u.session_ref, interaction_min=u.interaction_min) for u in usage]))
+                        usage=[dict(session_ref=u.session_ref, interaction_min=u.interaction_min, observed_min=u.observed_min) for u in usage]))
     return out
 
 
