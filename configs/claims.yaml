@@ -1,0 +1,2 @@
+# Mock MIS: attendance the centres *claimed* (Design.md §2.3). In production this comes from the scheme MIS / AEBAS.
+- {centre_code: SMOKE-01, session_ref: SMOKE-01/SMOKE/2026-10-14, batch: SMOKE, start: 2026-10-14T10:00:00+05:30, end: 2026-10-14T11:00:00+05:30, claimed_count: 9}

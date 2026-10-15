@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+data/
+!data/.gitkeep
+server/var/
+edge/var/
+*.pt
+*.onnx
+*_openvino_model/
+node_modules/
+dist/
+.DS_Store
+ml/runs/

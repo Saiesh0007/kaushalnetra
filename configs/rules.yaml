@@ -1,0 +1,20 @@
+# Rules-engine thresholds (Design.md §2.3, §3.8, §4, §6). Tune on validation data only (Rules.md §2).
+attendance:
+  band_min: 1               # minimum tolerance, persons
+  band_pct: 0.10            # tolerance as fraction of observed
+  min_gap_pct: 0.15         # gap must exceed this fraction of claimed to flag
+  single_session_warn_pct: 0.40   # one session with a gap this large raises a warning on its own
+  persist_sessions: 3       # flagged sessions needed in the last `persist_lookback` ...
+  persist_lookback: 5       # ... to escalate
+items:
+  persist_checks: 3         # consecutive candidate_missing / changed checks
+  min_days: 2               # spanning at least this many calendar days
+usage:
+  min_sessions: 5           # sessions with trainees present and zero use -> "unused"
+  min_attendance_ratio: 0.5
+tamper:
+  dedupe_minutes: 60
+risk:
+  window_days: 14
+  weights: {attendance: 35, infra: 25, usage: 10, tamper: 20, uptime: 10}
+  bands: {medium: 30, high: 60}

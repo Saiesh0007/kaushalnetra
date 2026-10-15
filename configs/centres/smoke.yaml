@@ -1,0 +1,21 @@
+# Smoke test on OpenCV's public pedestrian sample (data/samples/vtest.avi). Not a demo centre.
+device_id: edge-smoke
+centre:
+  code: SMOKE-01
+  name: Smoke Test Centre
+  state: Maharashtra
+  district: Pune
+  lat: 18.52
+  lon: 73.86
+  trade: Test
+  sanctioned_seats: 10
+sampling: {interval_s: 2, window_s: 20}
+server: {upload_interval_s: 2}
+cameras:
+  - id: cam-1
+    name: Corridor
+    source: ../../data/samples/vtest.avi
+    start_time: 2026-10-14T10:00:00+05:30
+    coverage: 1.0
+sessions:
+  - {batch: SMOKE, start: 2026-10-14T10:00:00+05:30, end: 2026-10-14T11:00:00+05:30}

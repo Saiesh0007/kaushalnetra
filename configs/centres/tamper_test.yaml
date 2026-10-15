@@ -1,0 +1,21 @@
+# Tamper test: 0-40s a, 40-70s b, 70-110s REPLAY of a (loop), 110-130s frozen, 130-140s black, 140-170s replay of b.
+device_id: edge-tamper
+centre:
+  code: TAMPER-01
+  name: Tamper Test Centre
+  state: Maharashtra
+  district: Pune
+  lat: 18.52
+  lon: 73.86
+  trade: Test
+  sanctioned_seats: 10
+sampling: {interval_s: 2, window_s: 20}
+server: {upload_interval_s: 2}
+cameras:
+  - id: cam-1
+    name: Corridor
+    source: ../../data/samples/tamper_test.mp4
+    start_time: 2026-10-14T10:00:00+05:30
+    coverage: 1.0
+sessions:
+  - {batch: TT, start: 2026-10-14T10:00:00+05:30, end: 2026-10-14T11:00:00+05:30}
