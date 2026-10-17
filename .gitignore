@@ -15,3 +15,6 @@ dist/
 ml/runs/
 runs/
 dashboard/public/geo/*.json.bak
+
+# Office lock files
+~$*
