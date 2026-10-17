@@ -18,3 +18,7 @@ dashboard/public/geo/*.json.bak
 
 # Office lock files
 ~$*
+
+# Local-only: planning docs and pitch deck
+docs/
+pitch/

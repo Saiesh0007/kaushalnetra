@@ -20,14 +20,6 @@ No face recognition is used anywhere. Raw video never leaves the centre.
 ```
 SIH/
 ├── README.md            ← you are here
-├── docs/
-│   ├── Plan.md          ← master plan: how we win + startup & funding path
-│   ├── Project.md       ← problem statement, scope, deliverables, success criteria
-│   ├── Architecture.md  ← system architecture, components, data flow, deployment modes
-│   ├── Design.md        ← detailed design: algorithms, data model, APIs, dashboard
-│   ├── Phases.md        ← build plan, milestones, task breakdown
-│   ├── Rules.md         ← engineering, privacy and contribution rules (mandatory)
-│   └── Memory.md        ← decision log, status, open questions, glossary
 ├── edge/                ← edge agent (Python): capture, inference, event queue
 ├── server/              ← FastAPI backend: ingest, rules engine, REST API
 ├── dashboard/           ← React + Vite monitoring dashboard
@@ -84,7 +76,7 @@ cd dashboard && npm install && npm run build && cd ..
 
 ## Documentation
 
-Start with [docs/Project.md](docs/Project.md), then [docs/Architecture.md](docs/Architecture.md). Read [docs/Rules.md](docs/Rules.md) before writing any code.
+Design notes, the privacy note and the pitch material are kept outside this repository.
 
 ## Team
 
