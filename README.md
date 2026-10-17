@@ -82,5 +82,4 @@ Design notes, the privacy note and the pitch material are kept outside this repo
 
 | Name | Role |
 |---|---|
-| Saiesh Sutar | Product, data collection, testing, pitch |
-| Claude (AI pair) | Code, ML pipeline, docs |
+| Saiesh Sutar | Product, engineering, data, pitch |
