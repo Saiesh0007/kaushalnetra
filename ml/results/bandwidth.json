@@ -12,11 +12,11 @@
   {
    "centre": "KN-DEMO-B",
    "mode": "edge",
-   "bytes_sent": 77736,
+   "bytes_sent": 159035,
    "raw_video_bytes": 742500000,
-   "reduction": 9552,
-   "session_hours": 2.0,
-   "kb_per_session_hour": 38.0
+   "reduction": 4669,
+   "session_hours": 4.17,
+   "kb_per_session_hour": 37.3
   },
   {
    "centre": "KN-DEMO-C",
@@ -30,17 +30,26 @@
   {
    "centre": "KN-DEMO-A",
    "mode": "edge",
-   "bytes_sent": 101837,
+   "bytes_sent": 153851,
    "raw_video_bytes": 945945000,
-   "reduction": 9289,
-   "session_hours": 2.17,
-   "kb_per_session_hour": 45.9
+   "reduction": 6148,
+   "session_hours": 3.25,
+   "kb_per_session_hour": 46.2
+  },
+  {
+   "centre": "KN-DEMO-E",
+   "mode": "edge",
+   "bytes_sent": 90349,
+   "raw_video_bytes": 217500000,
+   "reduction": 2407,
+   "session_hours": 0.52,
+   "kb_per_session_hour": 170.8
   }
  ],
- "total_sent": 252891,
- "total_raw": 2093445000,
- "overall_reduction": 8278,
- "kb_per_camera_hour": 47.8,
- "mb_per_camera_day_8h": 0.37,
+ "total_sent": 476553,
+ "total_raw": 2310945000,
+ "overall_reduction": 4849,
+ "kb_per_camera_hour": 52.1,
+ "mb_per_camera_day_8h": 0.41,
  "note": "Raw video = what streaming the same centre time at 1 Mbps (720p H.264) would upload. Includes all evidence thumbnails."
 }

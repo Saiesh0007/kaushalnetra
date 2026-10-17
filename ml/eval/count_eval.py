@@ -61,15 +61,26 @@ def main() -> None:
     ap.add_argument("--head", required=True)
     ap.add_argument("--n", type=int, default=500)
     ap.add_argument("--n-deg", type=int, default=150)
-    ap.add_argument("--conf", type=float, default=0.25)
+    ap.add_argument("--conf", type=float, default=None, help="fixed confidence; default: select on the VAL split")
     a = ap.parse_args()
     t0 = time.time()
     data = load_test(a.n)
     base, head = YOLO(str(ROOT / "yolo11n.pt")), YOLO(str(ROOT / a.head))
 
+    # choose the confidence threshold on the validation split only (Rules.md §2.2); test stays untouched
+    val_ids = (SCUT / "ImageSets/Main/val.txt").read_text().split()[:150]
+    val = [(cv2.imread(str(SCUT / f"JPEGImages/{i}.jpg")), len(ET.parse(SCUT / f"Annotations/{i}.xml").findall("object"))) for i in val_ids]
+    conf_scan = {}
+    if a.conf is None:
+        for c in (0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5):
+            conf_scan[c] = metrics([(g, count(head, img, None, c, 640)) for img, g in val])["mae"]
+        a.conf = min(conf_scan, key=conf_scan.get)
+        print("val conf scan (MAE):", conf_scan, "-> conf", a.conf, flush=True)
+
     models = []
-    for name, m, cls in (("YOLO11n person (off-the-shelf)", base, [0]), ("KaushalNetra head detector (fine-tuned YOLO11n)", head, None)):
-        pairs = [(g, count(m, img, cls, a.conf, 640)) for img, g in data]
+    for name, m, cls, c in (("YOLO11n person (off-the-shelf)", base, [0], 0.25),
+                            ("KaushalNetra head detector (fine-tuned YOLO11n)", head, None, a.conf)):
+        pairs = [(g, count(m, img, cls, c, 640)) for img, g in data]
         models.append(dict(name=name, **metrics(pairs)))
         print(models[-1], flush=True)
 
@@ -87,7 +98,7 @@ def main() -> None:
             print(deg[-1], flush=True)
 
     out = dict(dataset=f"SCUT-HEAD PartA test split (held out), first {a.n} images; degradation on first {a.n_deg}",
-               licence_note="SCUT-HEAD: free for academic research use", conf=a.conf, imgsz=640, models=models,
+               licence_note="SCUT-HEAD: free for academic research use", conf=a.conf, conf_selected_on_val=conf_scan, imgsz=640, models=models,
                degradation=deg, seconds=round(time.time() - t0))
     (ROOT / "ml/results").mkdir(parents=True, exist_ok=True)
     (ROOT / "ml/results/count_eval.json").write_text(json.dumps(out, indent=1))

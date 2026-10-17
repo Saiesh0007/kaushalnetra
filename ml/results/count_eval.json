@@ -1,0 +1,232 @@
+{
+ "dataset": "SCUT-HEAD PartA test split (held out), first 500 images; degradation on first 100",
+ "licence_note": "SCUT-HEAD: free for academic research use",
+ "conf": 0.3,
+ "conf_selected_on_val": {
+  "0.2": 5.2,
+  "0.25": 2.49,
+  "0.3": 2.03,
+  "0.35": 3.21,
+  "0.4": 5.19,
+  "0.45": 7.29,
+  "0.5": 10.51
+ },
+ "imgsz": 640,
+ "models": [
+  {
+   "name": "YOLO11n person (off-the-shelf)",
+   "n": 500,
+   "mean_gt": 34.4,
+   "mae": 29.96,
+   "rmse": 42.96,
+   "bias": -29.92,
+   "within_10pct": 0.064,
+   "mape": 0.743
+  },
+  {
+   "name": "KaushalNetra head detector (fine-tuned YOLO11n)",
+   "n": 500,
+   "mean_gt": 34.4,
+   "mae": 2.33,
+   "rmse": 3.83,
+   "bias": -0.67,
+   "within_10pct": 0.722,
+   "mape": 0.106
+  }
+ ],
+ "degradation": [
+  {
+   "condition": "resolution",
+   "value": 1.0,
+   "kb_per_frame": 84.4,
+   "n": 100,
+   "mean_gt": 29.9,
+   "mae": 2.44,
+   "rmse": 4.35,
+   "bias": -0.46,
+   "within_10pct": 0.64,
+   "mape": 0.11
+  },
+  {
+   "condition": "resolution",
+   "value": 0.75,
+   "kb_per_frame": 52.5,
+   "n": 100,
+   "mean_gt": 29.9,
+   "mae": 2.61,
+   "rmse": 4.4,
+   "bias": -1.25,
+   "within_10pct": 0.6,
+   "mape": 0.111
+  },
+  {
+   "condition": "resolution",
+   "value": 0.5,
+   "kb_per_frame": 29.2,
+   "n": 100,
+   "mean_gt": 29.9,
+   "mae": 3.57,
+   "rmse": 6.04,
+   "bias": -2.89,
+   "within_10pct": 0.47,
+   "mape": 0.168
+  },
+  {
+   "condition": "resolution",
+   "value": 0.35,
+   "kb_per_frame": 16.5,
+   "n": 100,
+   "mean_gt": 29.9,
+   "mae": 7.73,
+   "rmse": 11.65,
+   "bias": -7.61,
+   "within_10pct": 0.19,
+   "mape": 0.314
+  },
+  {
+   "condition": "jpeg_quality",
+   "value": 90,
+   "kb_per_frame": 118.9,
+   "n": 100,
+   "mean_gt": 29.9,
+   "mae": 2.58,
+   "rmse": 4.38,
+   "bias": -0.76,
+   "within_10pct": 0.65,
+   "mape": 0.115
+  },
+  {
+   "condition": "jpeg_quality",
+   "value": 50,
+   "kb_per_frame": 65.5,
+   "n": 100,
+   "mean_gt": 29.9,
+   "mae": 2.89,
+   "rmse": 4.95,
+   "bias": -1.87,
+   "within_10pct": 0.57,
+   "mape": 0.121
+  },
+  {
+   "condition": "jpeg_quality",
+   "value": 25,
+   "kb_per_frame": 41.8,
+   "n": 100,
+   "mean_gt": 29.9,
+   "mae": 3.7,
+   "rmse": 5.73,
+   "bias": -2.94,
+   "within_10pct": 0.41,
+   "mape": 0.167
+  },
+  {
+   "condition": "jpeg_quality",
+   "value": 10,
+   "kb_per_frame": 25.2,
+   "n": 100,
+   "mean_gt": 29.9,
+   "mae": 5.87,
+   "rmse": 9.44,
+   "bias": -5.41,
+   "within_10pct": 0.35,
+   "mape": 0.23
+  },
+  {
+   "condition": "darkness_gamma",
+   "value": 1.0,
+   "kb_per_frame": 84.4,
+   "n": 100,
+   "mean_gt": 29.9,
+   "mae": 2.44,
+   "rmse": 4.35,
+   "bias": -0.46,
+   "within_10pct": 0.64,
+   "mape": 0.11
+  },
+  {
+   "condition": "darkness_gamma",
+   "value": 1.6,
+   "kb_per_frame": 82.3,
+   "n": 100,
+   "mean_gt": 29.9,
+   "mae": 2.48,
+   "rmse": 4.46,
+   "bias": -1.26,
+   "within_10pct": 0.63,
+   "mape": 0.12
+  },
+  {
+   "condition": "darkness_gamma",
+   "value": 2.2,
+   "kb_per_frame": 77.4,
+   "n": 100,
+   "mean_gt": 29.9,
+   "mae": 5.07,
+   "rmse": 8.14,
+   "bias": -4.55,
+   "within_10pct": 0.3,
+   "mape": 0.221
+  },
+  {
+   "condition": "darkness_gamma",
+   "value": 2.8,
+   "kb_per_frame": 72.4,
+   "n": 100,
+   "mean_gt": 29.9,
+   "mae": 9,
+   "rmse": 13.85,
+   "bias": -8.76,
+   "within_10pct": 0.17,
+   "mape": 0.387
+  },
+  {
+   "condition": "noise_sigma",
+   "value": 0,
+   "kb_per_frame": 84.4,
+   "n": 100,
+   "mean_gt": 29.9,
+   "mae": 2.44,
+   "rmse": 4.35,
+   "bias": -0.46,
+   "within_10pct": 0.64,
+   "mape": 0.11
+  },
+  {
+   "condition": "noise_sigma",
+   "value": 10,
+   "kb_per_frame": 122.5,
+   "n": 100,
+   "mean_gt": 29.9,
+   "mae": 2.36,
+   "rmse": 4.16,
+   "bias": -0.58,
+   "within_10pct": 0.62,
+   "mape": 0.13
+  },
+  {
+   "condition": "noise_sigma",
+   "value": 20,
+   "kb_per_frame": 182.4,
+   "n": 100,
+   "mean_gt": 29.9,
+   "mae": 2.83,
+   "rmse": 4.49,
+   "bias": -0.37,
+   "within_10pct": 0.47,
+   "mape": 0.179
+  },
+  {
+   "condition": "noise_sigma",
+   "value": 30,
+   "kb_per_frame": 228.5,
+   "n": 100,
+   "mean_gt": 29.9,
+   "mae": 3.67,
+   "rmse": 5.28,
+   "bias": 0.25,
+   "within_10pct": 0.35,
+   "mape": 0.438
+  }
+ ],
+ "seconds": 1128
+}
