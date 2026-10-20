@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CircleMarker, GeoJSON, MapContainer, Tooltip } from "react-leaflet";
+import { CircleMarker, GeoJSON, MapContainer, Pane, Tooltip } from "react-leaflet";
 import { useNavigate } from "react-router-dom";
 import type { FeatureCollection } from "geojson";
 import "leaflet/dist/leaflet.css";
@@ -34,12 +34,15 @@ export function IndiaMap({ centres, height = 460 }: { centres: Centre[]; height?
       scrollWheelZoom={false}
       attributionControl={false}
     >
-      {geo && (
-        <>
-          <GeoJSON data={geo[0]} style={{ color: v("--border"), weight: 0.8, fillColor: v("--surface-2"), fillOpacity: 1 }} interactive={false} />
-          <GeoJSON data={geo[1]} style={{ color: v("--text-muted"), weight: 1.2, fill: false }} interactive={false} />
-        </>
-      )}
+      {/* outlines get their own pane below the markers: whichever loads first, the opaque states never cover the dots */}
+      <Pane name="geo" style={{ zIndex: 350 }}>
+        {geo && (
+          <>
+            <GeoJSON data={geo[0]} style={{ color: v("--border"), weight: 0.8, fillColor: v("--surface-2"), fillOpacity: 1 }} interactive={false} />
+            <GeoJSON data={geo[1]} style={{ color: v("--text-muted"), weight: 1.2, fill: false }} interactive={false} />
+          </>
+        )}
+      </Pane>
       {sorted.map((c) => (
         <CircleMarker
           key={c.code}
