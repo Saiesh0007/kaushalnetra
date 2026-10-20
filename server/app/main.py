@@ -8,6 +8,8 @@ import html
 import json
 import os
 import re
+import threading
+import time
 from pathlib import Path
 from datetime import datetime
 
@@ -284,12 +286,28 @@ def centre_summary(db: Session, c: D.Centre) -> dict:
                             queue_depth=dev.queue_depth, uptime_pct=dev.uptime_pct, mode=dev.mode) if dev else None)
 
 
+# Summarising every centre takes seconds, and each dashboard tab refetches on live updates; during a live run the
+# requests used to queue faster than they were answered. One computation is shared by all callers for a few seconds.
+_CENTRES_TTL = 3.0
+_centres_lock = threading.Lock()
+_centres_cache: tuple[float, list[dict]] = (0.0, [])
+
+
+def all_centre_summaries(db: Session) -> list[dict]:
+    global _centres_cache
+    with _centres_lock:
+        at, out = _centres_cache
+        if time.monotonic() - at > _CENTRES_TTL:
+            out = [centre_summary(db, c) for c in db.scalars(select(D.Centre))]
+            _centres_cache = (time.monotonic(), out)
+        return out
+
+
 @app.get("/api/v1/centres")
 def list_centres(state: str | None = None, band: str | None = None, db: Session = Depends(get_db)) -> list[dict]:
-    q = select(D.Centre)
+    out = all_centre_summaries(db)
     if state:
-        q = q.where(D.Centre.state == state)
-    out = [centre_summary(db, c) for c in db.scalars(q)]
+        out = [c for c in out if c["state"] == state]
     if band:
         out = [c for c in out if c["risk"]["band"] == band]
     return sorted(out, key=lambda c: -c["risk"]["score"])
@@ -390,7 +408,7 @@ async def patch_alert(alert_id: int, body: AlertPatch, db: Session = Depends(get
 @app.get("/api/v1/stats")
 def stats(db: Session = Depends(get_db)) -> dict:
     centres = db.scalars(select(D.Centre)).all()
-    summaries = [centre_summary(db, c) for c in centres]
+    summaries = all_centre_summaries(db)
     devs = db.scalars(select(D.DeviceStat)).all()
     real_ids = {c.id for c in centres if not c.simulated}
     real_devs = [d for d in devs if d.centre_id in real_ids and (d.raw_video_bytes or 0) > 0]

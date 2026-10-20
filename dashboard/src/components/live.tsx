@@ -13,11 +13,14 @@ export interface LiveMsg {
 interface LiveState {
   connected: boolean;
   feed: LiveMsg[];        // newest first
-  version: number;        // bumps on every message: pages refetch on change
+  version: number;        // bumps on new messages (at most every REFETCH_MS): pages refetch on change
 }
 
 const Ctx = createContext<LiveState>({ connected: false, feed: [], version: 0 });
 export const useLive = () => useContext(Ctx);
+
+// A live run sends dozens of messages; refetching on each one queues slow requests faster than the server answers.
+const REFETCH_MS = 5000;
 
 export function LiveProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<LiveState>({ connected: false, feed: [], version: 0 });
@@ -26,7 +29,14 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let ws: WebSocket | null = null;
     let timer: number | undefined;
+    let bumpTimer: number | undefined;
+    let lastBump = 0;
     let stopped = false;
+    const bump = () => {
+      bumpTimer = undefined;
+      lastBump = Date.now();
+      setState((s) => ({ ...s, version: s.version + 1 }));
+    };
     const connect = () => {
       ws = new WebSocket(WS_URL);
       ws.onopen = () => {
@@ -35,7 +45,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       };
       ws.onmessage = (e) => {
         const msg = { ...(JSON.parse(e.data) as Omit<LiveMsg, "at">), at: Date.now() };
-        setState((s) => ({ ...s, feed: [msg, ...s.feed].slice(0, 200), version: s.version + 1 }));
+        setState((s) => ({ ...s, feed: [msg, ...s.feed].slice(0, 200) }));
+        if (bumpTimer === undefined) bumpTimer = window.setTimeout(bump, Math.max(0, lastBump + REFETCH_MS - Date.now()));
       };
       ws.onclose = () => {
         setState((s) => ({ ...s, connected: false }));
@@ -46,6 +57,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     return () => {
       stopped = true;
       window.clearTimeout(timer);
+      window.clearTimeout(bumpTimer);
       ws?.close();
     };
   }, []);
