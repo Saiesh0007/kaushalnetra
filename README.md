@@ -73,13 +73,3 @@ cd dashboard && npm install && npm run build && cd ..
 | Unsplash room photos | equipment scenarios (`ml/sim`) with exact ground truth | Unsplash License |
 | OpenCV `vtest.avi` | smoke + tamper tests | OpenCV sample data |
 | DataMeet India boundaries | dashboard map (official composite boundary) | CC BY 4.0 |
-
-## Documentation
-
-Design notes, the privacy note and the pitch material are kept outside this repository.
-
-## Team
-
-| Name | Role |
-|---|---|
-| Saiesh Sutar | Product, engineering, data, pitch |
