@@ -249,6 +249,14 @@ def ask(db: Session, question: str, history: list[dict] | None = None) -> dict:
             return ask_llm(db, question, history or [])
         except (httpx.HTTPError, KeyError, ValueError) as e:
             out = ask_offline(db, question)
-            out["note"] = f"LLM unavailable ({type(e).__name__}); answered offline"
+            why = type(e).__name__
+            if isinstance(e, httpx.HTTPStatusError):  # status + provider message (never the key) tell a bad key from a quota
+                try:
+                    msg = e.response.json()
+                    msg = (msg[0] if isinstance(msg, list) else msg).get("error", {}).get("message", "")
+                except (ValueError, AttributeError, IndexError):
+                    msg = ""
+                why = f"HTTP {e.response.status_code}{': ' + msg[:120] if msg else ''}"
+            out["note"] = f"LLM unavailable ({why}); answered offline"
             return out
     return ask_offline(db, question)
