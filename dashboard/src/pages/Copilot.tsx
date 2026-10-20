@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Link } from "react-router-dom";
 import { API } from "../api";
 
@@ -8,6 +8,55 @@ interface Turn {
   tool_calls?: { name: string; args: Record<string, unknown> }[];
   mode?: string;
   note?: string;
+}
+
+// Conversation lives outside the component so it survives page switches,
+// and in sessionStorage so it survives a refresh of the tab.
+const KEY = "kn.copilot.turns";
+function load(): Turn[] {
+  try {
+    return JSON.parse(sessionStorage.getItem(KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+let chat: { turns: Turn[]; busy: boolean } = { turns: load(), busy: false };
+const subs = new Set<() => void>();
+function setChat(next: Partial<typeof chat>) {
+  chat = { ...chat, ...next };
+  try {
+    sessionStorage.setItem(KEY, JSON.stringify(chat.turns));
+  } catch {
+    /* storage unavailable: keep in memory only */
+  }
+  subs.forEach((f) => f());
+}
+function subscribe(f: () => void) {
+  subs.add(f);
+  return () => {
+    subs.delete(f);
+  };
+}
+const addTurn = (t: Turn) => setChat({ turns: [...chat.turns, t] });
+
+async function send(question: string) {
+  if (!question.trim() || chat.busy) return;
+  const history = chat.turns.map(({ role, content }) => ({ role, content }));
+  addTurn({ role: "user", content: question });
+  setChat({ busy: true });
+  try {
+    const r = await fetch(`${API}/api/v1/copilot`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ question, history }),
+    });
+    const d = await r.json();
+    addTurn({ role: "assistant", content: d.answer, tool_calls: d.tool_calls, mode: d.mode, note: d.note });
+  } catch (e) {
+    addTurn({ role: "assistant", content: `Could not reach the server: ${String(e)}` });
+  } finally {
+    setChat({ busy: false });
+  }
 }
 
 const SUGGEST = [
@@ -61,34 +110,12 @@ function Rich({ text }: { text: string }) {
 }
 
 export function Copilot() {
-  const [turns, setTurns] = useState<Turn[]>([]);
+  const { turns, busy } = useSyncExternalStore(subscribe, () => chat);
   const [q, setQ] = useState("");
-  const [busy, setBusy] = useState(false);
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => {
     end.current?.scrollIntoView({ behavior: "smooth" });
   }, [turns]);
-
-  const send = async (question: string) => {
-    if (!question.trim() || busy) return;
-    const history = turns.map(({ role, content }) => ({ role, content }));
-    setTurns((t) => [...t, { role: "user", content: question }]);
-    setQ("");
-    setBusy(true);
-    try {
-      const r = await fetch(`${API}/api/v1/copilot`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ question, history }),
-      });
-      const d = await r.json();
-      setTurns((t) => [...t, { role: "assistant", content: d.answer, tool_calls: d.tool_calls, mode: d.mode, note: d.note }]);
-    } catch (e) {
-      setTurns((t) => [...t, { role: "assistant", content: `Could not reach the server: ${String(e)}` }]);
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <>
@@ -97,6 +124,9 @@ export function Copilot() {
           <h1>Inspector Copilot</h1>
           <p>Ask in English or Hindi. The copilot reads aggregate compliance data only: no images, no personal data.</p>
         </div>
+        {turns.length > 0 && (
+          <button className="btn" disabled={busy} onClick={() => setChat({ turns: [] })}>New chat</button>
+        )}
       </div>
       <div className="card" style={{ display: "flex", flexDirection: "column", minHeight: 520 }}>
         <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column", gap: 12, paddingBottom: 8 }}>
@@ -127,7 +157,7 @@ export function Copilot() {
           {busy && <div className="muted">Looking up compliance data…</div>}
           <div ref={end} />
         </div>
-        <form className="row" style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }} onSubmit={(e) => { e.preventDefault(); void send(q); }}>
+        <form className="row" style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }} onSubmit={(e) => { e.preventDefault(); if (busy) return; void send(q); setQ(""); }}>
           <input style={{ flex: 1 }} placeholder="e.g. Which centres in Uttar Pradesh need a visit?" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Question" />
           <button className="btn primary" disabled={busy || !q.trim()}>Ask</button>
         </form>
