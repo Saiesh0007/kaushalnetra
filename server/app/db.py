@@ -5,7 +5,7 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, create_engine
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 VAR_DIR = Path(os.environ.get("KNETRA_VAR", Path(__file__).resolve().parents[1] / "var"))
@@ -15,6 +15,12 @@ THUMB_DIR.mkdir(exist_ok=True)
 
 engine = create_engine(f"sqlite:///{VAR_DIR / 'kaushalnetra.db'}", connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(engine, expire_on_commit=False)
+DATA_VERSION = [0]   # bumped on every commit, so read caches know when to recompute
+
+
+@event.listens_for(SessionLocal, "after_commit")
+def _bump_version(_session) -> None:
+    DATA_VERSION[0] += 1
 
 
 def utc(dt: datetime) -> datetime:

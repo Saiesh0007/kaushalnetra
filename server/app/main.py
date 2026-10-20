@@ -53,6 +53,12 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 def _startup() -> None:
     D.init_db()
 
+    def warm() -> None:  # the first visitor should not wait for every centre's summary on a small CPU
+        with D.SessionLocal() as db:
+            all_centre_summaries(db)
+
+    threading.Thread(target=warm, daemon=True).start()
+
 
 def get_db():
     db = D.SessionLocal()
@@ -291,20 +297,20 @@ def centre_summary(db: Session, c: D.Centre) -> dict:
                             queue_depth=dev.queue_depth, uptime_pct=dev.uptime_pct, mode=dev.mode) if dev else None)
 
 
-# Summarising every centre takes seconds, and each dashboard tab refetches on live updates; during a live run the
-# requests used to queue faster than they were answered. One computation is shared by all callers for a few seconds.
-_CENTRES_TTL = 3.0
+# Summarising every centre takes seconds (far longer on a small hosted CPU), and every dashboard tab asks for it.
+# The result only changes when the database does, so one computation is shared until the next commit.
 _centres_lock = threading.Lock()
-_centres_cache: tuple[float, list[dict]] = (0.0, [])
+_centres_cache: tuple[int, list[dict]] = (-1, [])
 
 
 def all_centre_summaries(db: Session) -> list[dict]:
     global _centres_cache
     with _centres_lock:
-        at, out = _centres_cache
-        if time.monotonic() - at > _CENTRES_TTL:
+        version, out = _centres_cache
+        if version != D.DATA_VERSION[0]:
+            version = D.DATA_VERSION[0]
             out = [centre_summary(db, c) for c in db.scalars(select(D.Centre))]
-            _centres_cache = (time.monotonic(), out)
+            _centres_cache = (version, out)
         return out
 
 
@@ -550,7 +556,8 @@ def _live_footage(which: str) -> bool:
 def live_demo_status() -> dict:
     p = _live["proc"]
     running = p is not None and p.poll() is None
-    ml = importlib.util.find_spec("ultralytics") is not None
+    onnx = os.environ.get("KNETRA_DETECTOR", "").endswith(".onnx") and importlib.util.find_spec("onnxruntime") is not None
+    ml = onnx or importlib.util.find_spec("ultralytics") is not None
     return {"running": running, "centre": _live["centre"] if running else None,
             "started": _live["started"] if running else None,
             "centres": [{"id": k, "label": v} for k, v in LIVE_CENTRES.items() if ml and _live_footage(k)]}
@@ -580,7 +587,7 @@ def start_live_demo(centre: str = "b") -> dict:
 @app.get("/edge/status", include_in_schema=False)
 async def edge_status() -> dict:
     try:
-        async with httpx.AsyncClient(timeout=3) as c:
+        async with httpx.AsyncClient(timeout=10) as c:   # a busy agent on a small host can take seconds to answer
             r = await c.get(f"{EDGE_PREVIEW}/status")
             r.raise_for_status()
             return r.json()
@@ -591,7 +598,7 @@ async def edge_status() -> dict:
 @app.post("/edge/offline", include_in_schema=False)
 async def edge_offline(on: int = 0) -> dict:
     try:
-        async with httpx.AsyncClient(timeout=3) as c:
+        async with httpx.AsyncClient(timeout=10) as c:
             r = await c.post(f"{EDGE_PREVIEW}/offline?on={1 if on else 0}")
             r.raise_for_status()
             return r.json()

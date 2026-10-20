@@ -1,0 +1,13 @@
+# server
+fastapi==0.143.2
+uvicorn[standard]==0.54.0
+sqlalchemy==2.1.4
+pydantic==2.14.1
+pyyaml==6.0.3
+httpx==0.28.1
+python-multipart==0.0.32
+# edge agent for live runs from the Control room: ONNX Runtime instead of PyTorch keeps the image within 512 MB RAM
+numpy==2.5.2
+onnxruntime==1.20.1
+opencv-python-headless>=4.9,<5
+imagehash==4.3.2

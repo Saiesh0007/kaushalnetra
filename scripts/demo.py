@@ -55,6 +55,8 @@ def live(which: str) -> None:
     batch = f"LIVE-{now:%H%M}"
     cfg["device_id"] = f"edge-live-{which}-{now:%H%M%S}"
     cfg["server"] = {**cfg.get("server", {}), "url": URL, "secret": os.environ.get("KNETRA_EDGE_SECRET", "dev-secret")}
+    if os.environ.get("KNETRA_DETECTOR"):  # e.g. yolo11n.onnx on a small host without PyTorch
+        cfg["model"] = {**cfg.get("model", {}), "detector": os.environ["KNETRA_DETECTOR"]}
     (ROOT / "edge/var/OFFLINE").unlink(missing_ok=True)  # a previous run may have ended with the network "cut"
     cam = cfg["cameras"][0]
     for seg in cam["segments"]:

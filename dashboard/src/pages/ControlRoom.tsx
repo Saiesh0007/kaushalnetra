@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { API, api, fmtBytes, type Stats } from "../api";
 import { useLive } from "../components/live";
@@ -10,6 +10,7 @@ const EDGE_PREVIEW = (import.meta.env.VITE_EDGE_PREVIEW as string | undefined) ?
 interface LiveDemo {
   running: boolean;
   centre: string | null;
+  started: string | null;
   centres: { id: string; label: string }[];
 }
 
@@ -20,14 +21,32 @@ export function ControlRoom() {
   const [nonce, setNonce] = useState(0);
   const [edge, setEdge] = useState<{ offline: boolean; queue_depth: number; bytes_sent: number } | null>(null);
   const [demo, setDemo] = useState<LiveDemo | null>(null);
+  const misses = useRef(0);
+  const inFlight = useRef(false);
   const [starting, setStarting] = useState(false);
+  const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const poll = () => {
-      fetch(`${EDGE_PREVIEW}/status`).then((r) => (r.ok ? r.json() : null)).then(setEdge).catch(() => setEdge(null));
       fetch(`${API}/api/v1/demo/live`).then((r) => (r.ok ? r.json() : null)).then(setDemo).catch(() => setDemo(null));
+      // a busy edge device can miss a beat; only treat it as gone after a few missed polls
+      if (inFlight.current) return;
+      inFlight.current = true;
+      fetch(`${EDGE_PREVIEW}/status`)
+        .finally(() => (inFlight.current = false))
+        .then((r) => (r.ok ? r.json() : Promise.reject()))
+        .then((d) => {
+          misses.current = 0;
+          setEdge(d);
+        })
+        .catch(() => {
+          if (++misses.current >= 3) setEdge(null);
+        });
     };
     poll();
-    const t = window.setInterval(poll, 1000);
+    const t = window.setInterval(() => {
+      poll();
+      setNow(Date.now());
+    }, 1000);
     return () => window.clearInterval(t);
   }, []);
   // reconnect the preview by itself once an edge device starts streaming
@@ -96,7 +115,13 @@ export function ControlRoom() {
           ) : (
             <div className="callout">
               {busy ? (
-                <>Starting the edge AI on recorded footage… the live view appears in about 20 seconds.</>
+                <>
+                  Starting the edge AI on recorded footage…
+                  {demo?.started && <span className="muted"> {Math.max(0, Math.round((now - Date.parse(demo.started)) / 1000))} s</span>}
+                  <div className="muted" style={{ marginTop: 6, fontSize: 12.5 }}>
+                    About 20 seconds on a laptop; a free hosted server can take a minute or two.
+                  </div>
+                </>
               ) : demo && demo.centres.length > 0 ? (
                 <>
                   No edge device is streaming. Run the real edge AI on a demo centre's recorded footage:

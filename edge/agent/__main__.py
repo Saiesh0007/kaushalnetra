@@ -7,6 +7,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import threading
 import time
 import uuid
@@ -274,6 +275,8 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s", datefmt="%H:%M:%S")
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
+    if os.environ.get("OMP_NUM_THREADS"):  # small hosts: keep OpenCV to the same thread budget as the detector
+        cv2.setNumThreads(int(os.environ["OMP_NUM_THREADS"]))
     cfg = C.load(args.config)
     if not args.no_register:
         register(cfg)

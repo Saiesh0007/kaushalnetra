@@ -15,7 +15,7 @@ dist/
 ml/runs/
 runs/
 dashboard/public/geo/*.json.bak
-deploy/space/build/
+deploy/web/build/
 
 # Office lock files
 ~$*
@@ -23,4 +23,4 @@ deploy/space/build/
 # Local-only: planning docs and pitch deck
 docs/
 pitch/
-deploy/space/*.log
+deploy/web/*.log
