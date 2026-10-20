@@ -65,7 +65,9 @@ export function Copilot() {
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
   const end = useRef<HTMLDivElement>(null);
-  useEffect(() => end.current?.scrollIntoView({ behavior: "smooth" }), [turns]);
+  useEffect(() => {
+    end.current?.scrollIntoView({ behavior: "smooth" });
+  }, [turns]);
 
   const send = async (question: string) => {
     if (!question.trim() || busy) return;
