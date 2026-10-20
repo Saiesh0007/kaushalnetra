@@ -23,3 +23,4 @@ deploy/space/build/
 # Local-only: planning docs and pitch deck
 docs/
 pitch/
+deploy/space/*.log
