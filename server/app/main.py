@@ -5,17 +5,22 @@ import gzip
 import hashlib
 import hmac
 import html
+import importlib.util
 import json
 import os
 import re
+import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
 from datetime import datetime
 
+import httpx
+import yaml
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from pydantic import BaseModel, TypeAdapter
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -524,6 +529,97 @@ def eval_report() -> dict:
     return out
 
 
+# ---------------------------------------------------------------- live edge demo
+# The control room's live view comes from an edge agent's preview server. Locally you can start one from a terminal;
+# a hosted demo exposes a single port, so the server can start the agent on bundled footage and relays its preview.
+ROOT = Path(__file__).resolve().parents[2]
+EDGE_PREVIEW = os.environ.get("KNETRA_EDGE_PREVIEW", "http://127.0.0.1:8001").rstrip("/")
+LIVE_CENTRES = {"b": "Demo Centre B (lab): inflated attendance", "a": "Demo Centre A (classroom): network cut"}
+_live: dict = {"proc": None, "centre": None, "started": None}
+_live_lock = threading.Lock()
+
+
+def _live_footage(which: str) -> bool:
+    try:
+        cfg = yaml.safe_load((ROOT / f"configs/centres/demo_{which}.yaml").read_text(encoding="utf-8"))
+        return (ROOT / "configs/centres" / cfg["cameras"][0]["segments"][0]["source"]).exists()
+    except (OSError, KeyError, IndexError, TypeError):
+        return False
+
+
+def live_demo_status() -> dict:
+    p = _live["proc"]
+    running = p is not None and p.poll() is None
+    ml = importlib.util.find_spec("ultralytics") is not None
+    return {"running": running, "centre": _live["centre"] if running else None,
+            "started": _live["started"] if running else None,
+            "centres": [{"id": k, "label": v} for k, v in LIVE_CENTRES.items() if ml and _live_footage(k)]}
+
+
+@app.get("/api/v1/demo/live")
+def get_live_demo() -> dict:
+    return live_demo_status()
+
+
+@app.post("/api/v1/demo/live")
+def start_live_demo(centre: str = "b") -> dict:
+    with _live_lock:
+        st = live_demo_status()
+        if st["running"]:
+            raise HTTPException(409, "a live run is already in progress")
+        if centre not in {c["id"] for c in st["centres"]}:
+            raise HTTPException(404, "live demo not available for this centre on this server")
+        log = D.VAR_DIR / "live_demo.log"
+        env = {**os.environ, "KNETRA_URL": os.environ.get("KNETRA_SELF_URL", "http://127.0.0.1:8000")}
+        _live["proc"] = subprocess.Popen([sys.executable, "scripts/demo.py", "live", centre, "--no-browser"], cwd=ROOT, env=env,
+                                         stdout=open(log, "w", encoding="utf-8"), stderr=subprocess.STDOUT)
+        _live["centre"], _live["started"] = centre, datetime.utcnow().isoformat() + "Z"
+        return live_demo_status()
+
+
+@app.get("/edge/status", include_in_schema=False)
+async def edge_status() -> dict:
+    try:
+        async with httpx.AsyncClient(timeout=3) as c:
+            r = await c.get(f"{EDGE_PREVIEW}/status")
+            r.raise_for_status()
+            return r.json()
+    except httpx.HTTPError:
+        raise HTTPException(503, "no edge device streaming a preview")
+
+
+@app.post("/edge/offline", include_in_schema=False)
+async def edge_offline(on: int = 0) -> dict:
+    try:
+        async with httpx.AsyncClient(timeout=3) as c:
+            r = await c.post(f"{EDGE_PREVIEW}/offline?on={1 if on else 0}")
+            r.raise_for_status()
+            return r.json()
+    except httpx.HTTPError:
+        raise HTTPException(503, "no edge device streaming a preview")
+
+
+@app.get("/edge/stream.mjpg", include_in_schema=False)
+async def edge_stream() -> StreamingResponse:
+    client = httpx.AsyncClient(timeout=httpx.Timeout(10, read=None))
+    try:
+        r = await client.send(client.build_request("GET", f"{EDGE_PREVIEW}/stream.mjpg"), stream=True)
+        r.raise_for_status()
+    except httpx.HTTPError:
+        await client.aclose()
+        raise HTTPException(503, "no edge device streaming a preview")
+
+    async def body():
+        try:
+            async for chunk in r.aiter_raw():
+                yield chunk
+        finally:
+            await r.aclose()
+            await client.aclose()
+
+    return StreamingResponse(body(), media_type=r.headers.get("content-type", "multipart/x-mixed-replace; boundary=frame"))
+
+
 # ---------------------------------------------------------------- built dashboard (single-container deploy)
 DIST = Path(__file__).resolve().parents[2] / "dashboard" / "dist"
 if DIST.exists():
@@ -534,4 +630,6 @@ if DIST.exists():
 
     @app.get("/{path:path}", include_in_schema=False)
     def spa(path: str) -> FileResponse:
+        if path.startswith(("api/", "edge/")):  # a wrong API address should be a 404, not the dashboard page
+            raise HTTPException(404, "not found")
         return FileResponse(DIST / "index.html")

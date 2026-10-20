@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import tempfile
@@ -19,7 +20,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 PY = sys.executable
-URL = "http://127.0.0.1:8000"
+URL = os.environ.get("KNETRA_URL", "http://127.0.0.1:8000").rstrip("/")
 IST = timezone(timedelta(hours=5, minutes=30))
 LIVE_CLAIMS = {"b": 15, "a": 12, "d": 14}
 
@@ -53,6 +54,8 @@ def live(which: str) -> None:
     now = datetime.now(IST).replace(microsecond=0)
     batch = f"LIVE-{now:%H%M}"
     cfg["device_id"] = f"edge-live-{which}-{now:%H%M%S}"
+    cfg["server"] = {**cfg.get("server", {}), "url": URL, "secret": os.environ.get("KNETRA_EDGE_SECRET", "dev-secret")}
+    (ROOT / "edge/var/OFFLINE").unlink(missing_ok=True)  # a previous run may have ended with the network "cut"
     cam = cfg["cameras"][0]
     for seg in cam["segments"]:
         seg["source"] = str((ROOT / "configs/centres" / seg["source"]).resolve())

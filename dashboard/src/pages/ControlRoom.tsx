@@ -1,10 +1,17 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, fmtBytes, type Stats } from "../api";
+import { API, api, fmtBytes, type Stats } from "../api";
 import { useLive } from "../components/live";
 import { SeverityChip } from "../components/Status";
 
-const EDGE_PREVIEW = (import.meta.env.VITE_EDGE_PREVIEW as string | undefined) ?? "http://127.0.0.1:8001";
+// the server relays the edge agent's preview, so this works locally and on a hosted single-port demo
+const EDGE_PREVIEW = (import.meta.env.VITE_EDGE_PREVIEW as string | undefined) ?? `${API}/edge`;
+
+interface LiveDemo {
+  running: boolean;
+  centre: string | null;
+  centres: { id: string; label: string }[];
+}
 
 export function ControlRoom() {
   const { feed, connected, version } = useLive();
@@ -12,13 +19,35 @@ export function ControlRoom() {
   const [previewOk, setPreviewOk] = useState(true);
   const [nonce, setNonce] = useState(0);
   const [edge, setEdge] = useState<{ offline: boolean; queue_depth: number; bytes_sent: number } | null>(null);
+  const [demo, setDemo] = useState<LiveDemo | null>(null);
+  const [starting, setStarting] = useState(false);
   useEffect(() => {
-    const t = window.setInterval(() => {
-      fetch(`${EDGE_PREVIEW}/status`).then((r) => r.json()).then(setEdge).catch(() => setEdge(null));
-    }, 1000);
+    const poll = () => {
+      fetch(`${EDGE_PREVIEW}/status`).then((r) => (r.ok ? r.json() : null)).then(setEdge).catch(() => setEdge(null));
+      fetch(`${API}/api/v1/demo/live`).then((r) => (r.ok ? r.json() : null)).then(setDemo).catch(() => setDemo(null));
+    };
+    poll();
+    const t = window.setInterval(poll, 1000);
     return () => window.clearInterval(t);
   }, []);
-  const toggle = (on: boolean) => fetch(`${EDGE_PREVIEW}/offline?on=${on ? 1 : 0}`, { method: "POST" }).then((r) => r.json()).then((d) => setEdge((e) => (e ? { ...e, ...d } : e)));
+  // reconnect the preview by itself once an edge device starts streaming
+  const streaming = edge !== null;
+  useEffect(() => {
+    if (streaming) {
+      setPreviewOk(true);
+      setNonce((n) => n + 1);
+      setStarting(false);
+    }
+  }, [streaming]);
+  const toggle = (on: boolean) => fetch(`${EDGE_PREVIEW}/offline?on=${on ? 1 : 0}`, { method: "POST" }).then((r) => (r.ok ? r.json() : {})).then((d) => setEdge((e) => (e ? { ...e, ...d } : e)));
+  const start = (centre: string) => {
+    setStarting(true);
+    fetch(`${API}/api/v1/demo/live?centre=${centre}`, { method: "POST" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => (d ? setDemo(d) : setStarting(false)))
+      .catch(() => setStarting(false));
+  };
+  const busy = starting || !!demo?.running;
   useEffect(() => {
     api.stats().then(setStats).catch(() => undefined);
   }, [version]);
@@ -61,13 +90,28 @@ export function ControlRoom() {
               )}
             </div>
           )}
-          {previewOk ? (
+          {previewOk && streaming ? (
             <img key={nonce} src={`${EDGE_PREVIEW}/stream.mjpg`} onError={() => setPreviewOk(false)} alt="Live, privacy-blurred edge preview"
               style={{ width: "100%", borderRadius: 8, background: "var(--surface-2)", minHeight: 240 }} />
           ) : (
             <div className="callout">
-              No edge device streaming a preview. Start one with:
-              <pre className="json" style={{ marginTop: 8 }}>.venv\Scripts\python -m edge.agent --config configs/centres/demo_b.yaml --realtime --preview</pre>
+              {busy ? (
+                <>Starting the edge AI on recorded footage… the live view appears in about 20 seconds.</>
+              ) : demo && demo.centres.length > 0 ? (
+                <>
+                  No edge device is streaming. Run the real edge AI on a demo centre's recorded footage:
+                  <div className="row" style={{ marginTop: 10, flexWrap: "wrap" }}>
+                    {demo.centres.map((c) => (
+                      <button key={c.id} className="btn primary" onClick={() => start(c.id)}>Start live run: {c.label}</button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <>
+                  No edge device streaming a preview. Start one with:
+                  <pre className="json" style={{ marginTop: 8 }}>.venv\Scripts\python scripts\demo.py live b --no-browser</pre>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -86,7 +130,7 @@ export function ControlRoom() {
                 <div key={i} className="row" style={{ fontSize: 12.5 }}>
                   <span className="muted mono">{new Date(m.at).toLocaleTimeString("en-IN", { hour12: false })}</span>
                   <Link to={`/centres/${m.centre_code}`}>{m.centre_code}</Link>
-                  <span className="secondary">{m.events} events</span>
+                  <span className="secondary">{m.events} {m.events === 1 ? "event" : "events"}</span>
                   <span className="spacer" />
                   <span className="mono muted">{fmtBytes(m.bytes ?? 0)}</span>
                 </div>
