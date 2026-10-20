@@ -67,7 +67,7 @@ export function ControlRoom() {
           ) : (
             <div className="callout">
               No edge device streaming a preview. Start one with:
-              <pre className="json" style={{ marginTop: 8 }}>python -m edge.agent --config configs/centres/demo_b.yaml --realtime --preview</pre>
+              <pre className="json" style={{ marginTop: 8 }}>.venv\Scripts\python -m edge.agent --config configs/centres/demo_b.yaml --realtime --preview</pre>
             </div>
           )}
         </div>
